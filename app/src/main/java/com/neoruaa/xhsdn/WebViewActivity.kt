@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -127,6 +128,12 @@ private fun WebViewScreen(
             settings.domStorageEnabled = true
             settings.cacheMode = WebSettings.LOAD_DEFAULT
             settings.userAgentString = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            settings.setSupportZoom(true)
+            settings.builtInZoomControls = true
+            settings.displayZoomControls = false
+            settings.useWideViewPort = true
+            settings.loadWithOverviewMode = true
+            setInitialScale(80)
         }
     }
 
@@ -164,7 +171,8 @@ private fun WebViewScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(horizontal = 16.dp)
+                    .padding(top = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 TextField(
@@ -226,8 +234,8 @@ private fun WebViewScreen(
                     androidx.compose.ui.viewinterop.AndroidView(
                         factory = { webView.apply { layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT) } },
                         modifier = Modifier
-    //                        .padding(6.dp)
-                            .fillMaxSize(),
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(18.dp)),
 
                         update = { }
                     )
@@ -245,6 +253,7 @@ private fun WebViewScreen(
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 loading = false
+                view?.let { applyDefaultZoom(it) }
             }
         }
         webView.webChromeClient = object : WebChromeClient() {
@@ -267,7 +276,47 @@ private fun loadUrl(webView: WebView, raw: String) {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
         url = "https://$url"
     }
+    applyDefaultZoom(webView)
     webView.loadUrl(url)
+}
+
+private fun applyDefaultZoom(webView: WebView) {
+    val targetScale = 0.8f
+    webView.post {
+        runCatching { webView.setInitialScale((targetScale * 100).toInt()) }
+        // 通过放大 viewport 宽度来实现 50% 视觉缩放，同时保持内容铺满
+        val js = """
+            (function() {
+                try {
+                    var scale = $targetScale;
+                    var width = Math.floor(window.innerWidth / scale);
+                    var meta = document.querySelector('meta[name="viewport"]');
+                    var content = 'width=' + width + ', initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no';
+                    if (meta) {
+                        meta.setAttribute('content', content);
+                    } else {
+                        meta = document.createElement('meta');
+                        meta.name = 'viewport';
+                        meta.content = content;
+                        document.head.appendChild(meta);
+                    }
+                    // 清理之前的 transform/zoom 以防冲突
+                    var reset = function(el) {
+                        el.style.transform = '';
+                        el.style.transformOrigin = '';
+                        el.style.width = '';
+                        el.style.height = '';
+                        el.style.zoom = '';
+                        el.style.margin = '';
+                        el.style.padding = '';
+                    };
+                    reset(document.documentElement);
+                    reset(document.body);
+                } catch (e) {}
+            })();
+        """.trimIndent()
+        webView.evaluateJavascript(js, null)
+    }
 }
 
 private fun extractImages(

@@ -62,6 +62,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
@@ -103,6 +104,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import android.util.Size
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import top.yukonga.miuix.kmp.icon.icons.basic.SearchCleanup
 import top.yukonga.miuix.kmp.icon.icons.useful.Edit
 import java.io.File
 
@@ -395,7 +398,7 @@ private fun HomePage(
                     trailingIcon = {
                         if (uiState.urlInput.isNotEmpty()) {
                             Icon(
-                                imageVector = MiuixIcons.Useful.Cancel,
+                                imageVector = MiuixIcons.Basic.SearchCleanup,
                                 contentDescription = "清空",
                                 modifier = Modifier
                                     .padding(end = 16.dp)
@@ -455,53 +458,61 @@ private fun LogPage(
     scrollBehavior: ScrollBehavior,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    Card(
+        modifier = modifier.fillMaxSize(),
+        cornerRadius = 18.dp,
+        colors = CardDefaults.defaultColors(
+            color = MiuixTheme.colorScheme.surface
+        )
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            cornerRadius = 18.dp,
-            colors = CardDefaults.defaultColors(
-                color = MiuixTheme.colorScheme.surface
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = 16.dp),
         ) {
             SmallTitle(text = "日志状态")
+
             if (uiState.progressLabel.isNotEmpty() || uiState.isDownloading) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 10.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(MiuixTheme.colorScheme.surfaceVariant)
+                ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(MiuixTheme.colorScheme.surfaceVariant)
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(text = "进度")
-                                Text(text = uiState.progressLabel.ifEmpty { "--" }, color = Color.Gray)
-                            }
-                            LinearProgressIndicator(progress = uiState.progress)
+                            Text(text = "进度")
+                            Text(text = uiState.progressLabel.ifEmpty { "--" }, color = Color.Gray)
                         }
+                        LinearProgressIndicator(progress = uiState.progress)
                     }
+                }
             }
-            Column(
+
+            BoxWithConstraints(
                 modifier = Modifier
-                    .padding(start = 16.dp, end = 16.dp, bottom = 10.dp)
+                    .weight(1f, fill = false)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 10.dp)
                     .clip(RoundedCornerShape(18.dp))
                     .background(MiuixTheme.colorScheme.surfaceVariant)
             ) {
-//                Spacer(modifier = Modifier.height(8.dp))
                 if (uiState.status.isEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(16.dp),
                     ) {
                         Text("暂无内容，开始下载后会显示日志")
                     }
@@ -511,8 +522,8 @@ private fun LogPage(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(max = maxHeight)
                             .padding(16.dp)
-//                            .heightIn(min = 200.dp)
                             .nestedScroll(scrollBehavior.nestedScrollConnection)
                     ) {
                         itemsIndexed(uiState.status) { index, line ->
@@ -520,18 +531,18 @@ private fun LogPage(
                         }
                     }
                 }
-
             }
+
             if (uiState.showWebCrawl) {
-                    Button(
-                        onClick = onOpenWeb,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 16.dp),
-                        colors = ButtonDefaults.buttonColors()
-                    ) {
-                        Text("JSON 解析失败？试试网页模式")
-                    }
+                Button(
+                    onClick = onOpenWeb,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = ButtonDefaults.buttonColors()
+                ) {
+                    Text("JSON 解析失败？试试网页模式")
+                }
             }
         }
     }
