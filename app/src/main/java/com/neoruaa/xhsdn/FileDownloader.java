@@ -63,6 +63,7 @@ public class FileDownloader {
 
     public boolean downloadFile(String url, String fileName, String timestamp) {
         try {
+            Log.d(TAG, "on downloadFile: " + fileName);
             // Create the request
             Request request = new Request.Builder()
                     .url(url)
@@ -788,6 +789,7 @@ public class FileDownloader {
     private int deleteExistingFilesInMediaStore(ContentResolver contentResolver, Uri collectionUri, 
                                                 String fileName, String relativePath) {
         try {
+            Log.d(TAG, "Deleting existing files in MediaStore with name: " + fileName);
             String selection = MediaStore.MediaColumns.DISPLAY_NAME + "=? AND " + 
                               MediaStore.MediaColumns.RELATIVE_PATH + "=?";
             String[] selectionArgs = new String[]{fileName, relativePath + File.separator};

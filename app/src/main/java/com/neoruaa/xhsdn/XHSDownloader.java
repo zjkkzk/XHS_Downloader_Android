@@ -1379,9 +1379,11 @@ public class XHSDownloader {
         if (customNamingEnabled && !TextUtils.isEmpty(customFormatTemplate)) {
             String customName = applyCustomTemplate(customFormatTemplate, fallbackPostId, mediaIndex, indexPart);
             if (!TextUtils.isEmpty(customName)) {
+                Log.d(TAG, "on buildFileBaseName: customNamingEnabled - " + customName);
                 return customName;
             }
         }
+        Log.d(TAG, "on buildFileBaseName: fallbackPostId - " + fallbackPostId + "_" + indexPart);
         return fallbackPostId + "_" + indexPart;
     }
 
@@ -1389,18 +1391,103 @@ public class XHSDownloader {
         if (TextUtils.isEmpty(template)) {
             return null;
         }
-        java.util.regex.Matcher matcher = NAMING_PLACEHOLDER_PATTERN.matcher(template);
-        StringBuffer buffer = new StringBuffer();
-        while (matcher.find()) {
-            String key = matcher.group(1);
-            String replacement = resolveTemplateValue(key, fallbackPostId, mediaIndex, indexPart);
-            if (replacement == null) {
-                replacement = "";
+
+        // Count how many times each token appears in the template
+        int titleTokenCount = countOccurrences(template, NamingFormat.buildPlaceholder(NamingFormat.TOKEN_TITLE));
+
+        String result;
+        if (titleTokenCount > 0) {
+            // If the template contains the title token, we need to estimate available space for the final filename
+            // We'll use a dynamic approach: calculate the base length and determine space for title
+
+            // Get the title text first to ensure we have it for calculations
+            String titleText = (currentNoteMetadata != null && currentNoteMetadata.title != null)
+                             ? currentNoteMetadata.title
+                             : "";
+
+            // Calculate the base length without the title content - using the actual values that will be used
+            // First, create the template with a placeholder for title to measure base length
+            String templateWithPlaceholder = template;
+            for (int i = 0; i < titleTokenCount; i++) {
+                templateWithPlaceholder = templateWithPlaceholder.replaceFirst(
+                    java.util.regex.Pattern.quote(NamingFormat.buildPlaceholder(NamingFormat.TOKEN_TITLE)),
+                    "PLACEHOLDER_FOR_CALCULATION");
             }
-            matcher.appendReplacement(buffer, java.util.regex.Matcher.quoteReplacement(replacement));
+
+            // Calculate the base length using the same logic that will be used for final result
+            java.util.regex.Matcher baseMatcher = NAMING_PLACEHOLDER_PATTERN.matcher(templateWithPlaceholder);
+            StringBuffer baseBuffer = new StringBuffer();
+            while (baseMatcher.find()) {
+                String key = baseMatcher.group(1);
+                String replacement = resolveTemplateValue(key, fallbackPostId, mediaIndex, indexPart);
+                if (replacement == null) {
+                    replacement = "";
+                }
+                baseMatcher.appendReplacement(baseBuffer, java.util.regex.Matcher.quoteReplacement(replacement));
+            }
+            baseMatcher.appendTail(baseBuffer);
+            String baseResult = baseBuffer.toString();
+
+            // Sanitize the base result (using 0 for no length limit during calculation)
+            String sanitizedBase = sanitizeForFilename(baseResult, 0);
+            if (TextUtils.isEmpty(sanitizedBase)) {
+                sanitizedBase = fallbackPostId + "_" + indexPart;
+            }
+
+            // Add index suffix if needed (this happens after the template is processed)
+            String indexSuffix = !containsIndexToken(template) ? "_" + indexPart : "";
+            String baseWithSuffix = sanitizedBase + indexSuffix;
+
+            // Calculate available space for title content
+            // The final filename in FileDownloader will be "xhs_" + baseFileName + "." + fileExtension
+            // We need to account for the "xhs_" prefix (4 chars), file extension (~10 chars), potential duplicate suffixes like " (1)" (~20 chars for safety), and extra buffer (~20 chars for safety)
+            int baseLength = baseWithSuffix.length();
+            int theoreticalAvailableForTitle = Math.max(1, 255 - 4 - 10 - 20 - 20 - baseLength); // At least 1 char, 4 for "xhs_" prefix, 10 for extension, 20 for duplicate suffix, 20 extra buffer
+
+            // To ensure truncation happens regardless of calculation, enforce a strict limit on title length
+            // This ensures that even if the base part is small, the title won't be excessively long
+            int maxAllowedTitleLength = 50; // Strict limit to ensure filename stays well under limit
+            int finalAvailableForTitle = Math.min(theoreticalAvailableForTitle, maxAllowedTitleLength);
+            String titleValue = safeTokenValue(titleText, finalAvailableForTitle);
+
+            // Now apply the template with the appropriately sized title
+            String finalTemplate = template;
+            for (int i = 0; i < titleTokenCount; i++) {
+                finalTemplate = finalTemplate.replaceFirst(
+                    java.util.regex.Pattern.quote(NamingFormat.buildPlaceholder(NamingFormat.TOKEN_TITLE)),
+                    java.util.regex.Matcher.quoteReplacement(titleValue));
+            }
+
+            // Process the template with all remaining tokens (the title is already properly sized)
+            java.util.regex.Matcher finalMatcher = NAMING_PLACEHOLDER_PATTERN.matcher(finalTemplate);
+            StringBuffer finalBuffer = new StringBuffer();
+            while (finalMatcher.find()) {
+                String key = finalMatcher.group(1);
+                String replacement = resolveTemplateValue(key, fallbackPostId, mediaIndex, indexPart);
+                if (replacement == null) {
+                    replacement = "";
+                }
+                finalMatcher.appendReplacement(finalBuffer, java.util.regex.Matcher.quoteReplacement(replacement));
+            }
+            finalMatcher.appendTail(finalBuffer);
+            result = finalBuffer.toString();
+        } else {
+            // Template doesn't contain title, apply normally
+            java.util.regex.Matcher matcher = NAMING_PLACEHOLDER_PATTERN.matcher(template);
+            StringBuffer buffer = new StringBuffer();
+            while (matcher.find()) {
+                String key = matcher.group(1);
+                String replacement = resolveTemplateValue(key, fallbackPostId, mediaIndex, indexPart);
+                if (replacement == null) {
+                    replacement = "";
+                }
+                matcher.appendReplacement(buffer, java.util.regex.Matcher.quoteReplacement(replacement));
+            }
+            matcher.appendTail(buffer);
+            result = buffer.toString();
         }
-        matcher.appendTail(buffer);
-        String sanitized = sanitizeForFilename(buffer.toString(), 120);
+
+        String sanitized = sanitizeForFilename(result, 0); // No length limit here since we handled it above
         if (TextUtils.isEmpty(sanitized)) {
             return null;
         }
@@ -1408,6 +1495,20 @@ public class XHSDownloader {
             sanitized = sanitized + "_" + indexPart;
         }
         return sanitized;
+    }
+
+    // Helper method to count occurrences of a substring
+    private int countOccurrences(String str, String substr) {
+        if (str == null || substr == null || substr.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int idx = 0;
+        while ((idx = str.indexOf(substr, idx)) != -1) {
+            count++;
+            idx += substr.length();
+        }
+        return count;
     }
 
     private boolean containsIndexToken(String template) {
@@ -1448,8 +1549,32 @@ public class XHSDownloader {
     }
 
     private String safeTokenValue(String value, int maxLength) {
-        return sanitizeForFilename(value, maxLength);
+        if (value == null) {
+            return null;
+        }
+
+        // First sanitize the value (remove invalid characters)
+        String sanitized = sanitizeForFilename(value, 0); // No length limit during sanitization
+
+        if (sanitized == null) {
+            return null;
+        }
+
+        // Now apply length limit with ellipsis if needed
+        if (maxLength > 0 && sanitized.length() > maxLength) {
+            // Reserve space for ellipsis
+            int availableLength = maxLength - 3; // 3 for "..."
+            if (availableLength > 0) {
+                sanitized = sanitized.substring(0, availableLength) + "...";
+            } else {
+                // If maxLength is too small for ellipsis, just truncate to maxLength
+                sanitized = sanitized.substring(0, maxLength);
+            }
+        }
+
+        return sanitized.isEmpty() ? null : sanitized;
     }
+
     
     /**
      * Creates live photos by combining images and videos
