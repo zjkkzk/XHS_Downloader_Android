@@ -92,6 +92,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(urlInput = value, showWebCrawl = false) }
     }
 
+    fun pasteLinkFromClipboard() {
+        viewModelScope.launch {
+            try {
+                val clipboardManager = getApplication<Application>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clipData = clipboardManager.primaryClip
+                if (clipData != null && clipData.itemCount > 0) {
+                    val clipboardText = clipData.getItemAt(0).text?.toString() ?: ""
+                    if (clipboardText.isNotEmpty()) {
+                        _uiState.update { it.copy(urlInput = clipboardText) }
+                        appendStatus("已从剪贴板粘贴链接")
+                    } else {
+                        appendStatus("剪贴板内容为空")
+                    }
+                } else {
+                    appendStatus("剪贴板无内容")
+                }
+            } catch (e: Exception) {
+                appendStatus("读取剪贴板失败: ${e.message}")
+            }
+        }
+    }
+
     fun startDownload(onError: (String) -> Unit) {
         val targetUrl = _uiState.value.urlInput.trim()
         if (targetUrl.isEmpty()) {

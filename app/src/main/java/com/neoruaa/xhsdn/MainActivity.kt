@@ -2,6 +2,7 @@ package com.neoruaa.xhsdn
 
 import android.Manifest
 import android.R
+import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -136,6 +137,7 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onCopyText = { ensureStoragePermission { viewModel.copyDescription({ showToast("已复制文案") }, { showToast(it) }) } },
+                    onPasteLink = { viewModel.pasteLinkFromClipboard() },
                     onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
                     onOpenWeb = { openWebCrawl(uiState.urlInput) },
                     onContinueDownload = { viewModel.continueAfterVideoWarning() },
@@ -276,6 +278,7 @@ private fun MainScreen(
     onUrlChange: (String) -> Unit,
     onDownload: () -> Unit,
     onCopyText: () -> Unit,
+    onPasteLink: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenWeb: () -> Unit,
     onContinueDownload: () -> Unit,
@@ -332,6 +335,7 @@ private fun MainScreen(
                 onUrlChange = onUrlChange,
                 onDownload = onDownload,
                 onCopyText = onCopyText,
+                onPasteLink = onPasteLink,
                 onOpenWeb = onOpenWeb,
                 scrollBehavior = scrollBehavior,
                 modifier = Modifier
@@ -377,6 +381,7 @@ private fun HomePage(
     onUrlChange: (String) -> Unit,
     onDownload: () -> Unit,
     onCopyText: () -> Unit,
+    onPasteLink: () -> Unit,
     onOpenWeb: () -> Unit,
     scrollBehavior: ScrollBehavior,
     modifier: Modifier = Modifier
@@ -422,8 +427,8 @@ private fun HomePage(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     TextButton(
-                        text = "复制文案",
-                        onClick = onCopyText,
+                        text = "粘贴链接",
+                        onClick = onPasteLink,
                         modifier = Modifier.weight(1f),
                         enabled = !uiState.isDownloading
                     )
@@ -439,6 +444,12 @@ private fun HomePage(
                         )
                     }
                 }
+                TextButton(
+                        text = "提取文案",
+                        onClick = onCopyText,
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !uiState.isDownloading
+                    )
                 if (uiState.showWebCrawl) {
                     Button(
                         onClick = onOpenWeb,
