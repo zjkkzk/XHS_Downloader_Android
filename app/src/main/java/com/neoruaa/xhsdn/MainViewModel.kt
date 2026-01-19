@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
+
 data class MediaItem(val path: String, val type: MediaType)
 
 enum class MediaType {
@@ -46,6 +47,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Track individual file progress for more accurate overall progress
     private val fileProgressMap = mutableMapOf<String, Float>() // Maps file path to progress (0.0 to 1.0)
     private var currentFileProgress = 0f // Progress of the currently downloading file (0.0 to 1.0)
+    private var lastOverallProgress = 0f // Track the last overall progress to prevent regression
 
     // Fields to track download progress and speed for the first callback
     private var currentDownloadStartTime: Long = 0
@@ -78,6 +80,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         currentDownloadedBytes = 0
         lastSpeedCalculationTime = 0
         lastCalculatedSpeed = "0KB/s"
+        lastOverallProgress = 0f // Reset the last overall progress when starting a new download
 
         // Update UI to show initial state
         _uiState.update { currentState ->
@@ -158,7 +161,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                         // Update speed calculation more frequently for better responsiveness
                         if (deltaTime > 500) { // Update every 0.5 seconds instead of 1 second
-                            val deltaBytes = downloaded - currentDownloadedBytes
+                            // Prevent negative deltaBytes by ensuring downloaded is greater than or equal to currentDownloadedBytes
+                            val deltaBytes = if (downloaded >= currentDownloadedBytes) {
+                                downloaded - currentDownloadedBytes
+                            } else {
+                                // If downloaded is less than currentDownloadedBytes, it means we're tracking a different file
+                                // In this case, just use the current downloaded amount as the basis
+                                downloaded
+                            }
+
                             val deltaTimeSec = deltaTime.toDouble() / 1000.0 // Convert to seconds
 
                             val speedBps = if (deltaTimeSec > 0) {
@@ -329,7 +340,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                         // Update speed calculation more frequently for better responsiveness
                         if (deltaTime > 500) { // Update every 0.5 seconds instead of 1 second
-                            val deltaBytes = downloaded - currentDownloadedBytes
+                            // Prevent negative deltaBytes by ensuring downloaded is greater than or equal to currentDownloadedBytes
+                            val deltaBytes = if (downloaded >= currentDownloadedBytes) {
+                                downloaded - currentDownloadedBytes
+                            } else {
+                                // If downloaded is less than currentDownloadedBytes, it means we're tracking a different file
+                                // In this case, just use the current downloaded amount as the basis
+                                downloaded
+                            }
+
                             val deltaTimeSec = deltaTime.toDouble() / 1000.0 // Convert to seconds
 
                             val speedBps = if (deltaTimeSec > 0) {
@@ -493,12 +512,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             "$downloadedCount/?"
         }
-        val overallProgress = if (totalMediaCount > 0) {
+        val calculatedProgress = if (totalMediaCount > 0) {
             // Calculate progress as (completed files + current file progress) / total files
             (downloadedCount + currentFileProgress) / totalMediaCount.toFloat()
         } else {
             0f
         }
+
+        // Ensure progress doesn't regress (go backwards)
+        val overallProgress = maxOf(calculatedProgress, lastOverallProgress)
+        lastOverallProgress = overallProgress
+
         _uiState.update { it.copy(progressLabel = label, progress = overallProgress) }
     }
 
