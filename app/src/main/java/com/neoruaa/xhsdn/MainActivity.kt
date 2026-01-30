@@ -68,6 +68,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
@@ -118,6 +119,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.combinedClickable
 import java.io.File
 import android.util.LruCache
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.derivedStateOf
 import com.kyant.capsule.ContinuousRoundedRectangle
@@ -529,6 +531,8 @@ private fun MainScreen(
     detectedXhsLink: String?,
     onDismissPrompt: () -> Unit
 ) {
+    val topBarState = rememberTopAppBarState()
+    val miuixScrollBehavior = MiuixScrollBehavior(state = topBarState)
     val statusListState = rememberLazyListState()
     var menuExpanded by remember { mutableStateOf(false) }
     var overflowButtonBounds by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -539,13 +543,13 @@ private fun MainScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout),
+            contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.displayCutout),
             topBar = {
                 val title = "小红书下载器"
                 TopAppBar(
                     title = title,
                     largeTitle = title,
-                    scrollBehavior = scrollBehavior,
+                    scrollBehavior = miuixScrollBehavior,
                     actions = {
                         Box(
                             modifier = Modifier
@@ -557,7 +561,7 @@ private fun MainScreen(
                             Icon(
                                 imageVector = MiuixIcons.MoreCircle,
                                 contentDescription = "更多",
-                                modifier = Modifier.size(24.dp)
+//                                modifier = Modifier.size(24.dp)
                             )
 
                             val menuItems = listOf("复制文案", "网页爬取")
@@ -597,7 +601,7 @@ private fun MainScreen(
                         Box(
                             modifier = Modifier
                                 .padding(end = 26.dp)
-                                .size(48.dp)
+//                                .size(48.dp)
                                 .clickable { onOpenSettings() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -627,7 +631,8 @@ private fun MainScreen(
                 onDismissPrompt = onDismissPrompt,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding)
+                    .padding(padding),
+                nestedScrollConnection = miuixScrollBehavior.nestedScrollConnection
             )
         }
 
@@ -650,7 +655,8 @@ private fun HistoryPage(
     onDeleteTask: (com.neoruaa.xhsdn.data.DownloadTask) -> Unit,
     detectedXhsLink: String?,
     onDismissPrompt: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    nestedScrollConnection: androidx.compose.ui.input.nestedscroll.NestedScrollConnection? = null
 ) {
     val tasks by com.neoruaa.xhsdn.data.TaskManager.getAllTasks().collectAsStateWithLifecycle(initialValue = emptyList())
     val navPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
@@ -747,7 +753,7 @@ private fun HistoryPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .clip(ContinuousRoundedRectangle(18.dp))
+                            .clip(ContinuousRoundedRectangle(28.dp))
                             .background(MiuixTheme.colorScheme.surfaceVariant)
                             .padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -778,7 +784,11 @@ private fun HistoryPage(
                             bottom = navPadding + 140.dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxSize()
+                        modifier = if (nestedScrollConnection != null) {
+                            Modifier.fillMaxSize().nestedScroll(nestedScrollConnection)
+                        } else {
+                            Modifier.fillMaxSize()
+                        }
                     ) {
                         itemsIndexed(filteredTasks, key = { _, task -> task.id }) { _, task ->
                             TaskCell(
