@@ -45,6 +45,13 @@ import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.gestures.detectTapGestures
+import com.neoruaa.xhsdn.MediaItem
+import com.neoruaa.xhsdn.MediaType
+import com.neoruaa.xhsdn.utils.detectMediaType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -791,6 +798,7 @@ private fun HistoryPage(
                         }
                     ) {
                         itemsIndexed(filteredTasks, key = { _, task -> task.id }) { _, task ->
+                            val context = LocalContext.current
                             TaskCell(
                                 task = task,
                                 // 只有正在下载的任务才使用 uiState.mediaItems
@@ -809,7 +817,16 @@ private fun HistoryPage(
                                 onWebCrawl = { onWebCrawlTask(task) },
                                 onStop = { onStopTask(task) },
                                 onDelete = { taskToDelete = task },
-                                onMediaClick = onMediaClick
+                                onMediaClick = onMediaClick,
+                                onClick = {
+                                    val intent = DetailActivity.newIntent(
+                                        context,
+                                        task.id.toString(),
+                                        task.noteTitle ?: task.noteUrl,
+                                        task.filePaths
+                                    )
+                                    context.startActivity(intent)
+                                }
                             )
                         }
                     }
@@ -936,7 +953,9 @@ private fun TaskCell(
     onWebCrawl: () -> Unit,
     onStop: () -> Unit,
     onDelete: () -> Unit,
-    onMediaClick: (MediaItem) -> Unit = {}
+    onMediaClick: (MediaItem) -> Unit = {},
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     val statusColor = when (task.status) {
         com.neoruaa.xhsdn.data.TaskStatus.QUEUED -> Color(0xFF9E9E9E)       // 灰色
@@ -962,11 +981,11 @@ private fun TaskCell(
     }
     
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(ContinuousRoundedRectangle(28.dp))
             .combinedClickable(
-                onClick = {}, 
+                onClick = { onClick?.invoke() },
                 onLongClick = onDelete
             )
             .background(MiuixTheme.colorScheme.surfaceVariant)
@@ -1201,121 +1220,6 @@ private fun formatTime(timestamp: Long): String {
 }
 
 @Composable
-private fun FilesPage(
-    uiState: MainUiState,
-    onMediaClick: (MediaItem) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val navPadding = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Card(
-        modifier = modifier,
-        cornerRadius = 18.dp,
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surface
-        )
-    ) {
-        SmallTitle(text = "已下载文件")
-        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-            if (uiState.mediaItems.isEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(ContinuousRoundedRectangle(18.dp))
-                        .background(MiuixTheme.colorScheme.surfaceVariant)
-                ) {
-                    Text(
-                        text = "暂无已下载文件",
-                        modifier = Modifier.padding(16.dp)
-                    )
-                }
-            } else {
-                LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Fixed(2),
-                    verticalItemSpacing = 10.dp,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = navPadding + 60.dp),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(bottom = 4.dp)
-                ) {
-                    items(uiState.mediaItems) { item ->
-                        MediaPreview(item = item, onClick = { onMediaClick(item) })
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun MediaPreview(item: MediaItem, onClick: () -> Unit) {
-    val bitmap = rememberThumbnail(item)
-    val aspectRatio = rememberAspectRatio(item) ?: 0.75f
-    Column(
-        modifier = Modifier
-            .clip(ContinuousRoundedRectangle(18.dp))
-            .background(MiuixTheme.colorScheme.surfaceVariant)
-            .clickable { onClick() }
-    ) {
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap,
-                contentDescription = item.path,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(aspectRatio)
-                    .background(Color.Black)
-            )
-        } else {
-            PlaceholderMedia(type = item.type, aspectRatio = aspectRatio)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val fileName = File(item.path).name
-            Text(
-                text = fileName,
-                modifier = Modifier.weight(1f),
-                maxLines = 1
-            )
-            if (item.type == MediaType.VIDEO) {
-                Icon(
-                    imageVector = MiuixIcons.Play,
-                    contentDescription = "播放",
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PlaceholderMedia(
-    type: MediaType,
-    aspectRatio: Float
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(aspectRatio)
-            .background(Color.Black.copy(alpha = 0.05f)),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = if (type == MediaType.VIDEO) MiuixIcons.Play else MiuixIcons.Info,
-            contentDescription = null,
-            modifier = Modifier.size(36.dp),
-            tint = Color.Gray
-        )
-    }
-}
-
-@Composable
 private fun rememberThumbnail(item: MediaItem): ImageBitmap? {
     // 先检查缓存
     val cachedBitmap = thumbnailCache.get(item.path)
@@ -1346,40 +1250,6 @@ private fun rememberThumbnail(item: MediaItem): ImageBitmap? {
     return state.value
 }
 
-@Composable
-private fun rememberAspectRatio(item: MediaItem): Float? {
-    return remember(item.path) {
-        kotlin.runCatching {
-            when (item.type) {
-                MediaType.IMAGE -> {
-                    val options = android.graphics.BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
-                    android.graphics.BitmapFactory.decodeFile(item.path, options)
-                    if (options.outWidth > 0 && options.outHeight > 0) {
-                        options.outWidth.toFloat() / options.outHeight.toFloat()
-                    } else {
-                        null
-                    }
-                }
-
-                MediaType.VIDEO -> {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(item.path)
-                        val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toFloatOrNull()
-                        val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toFloatOrNull()
-                        if (width != null && height != null && height > 0f) width / height else null
-                    } finally {
-                        retriever.release()
-                    }
-                }
-
-                MediaType.OTHER -> null
-            }
-        }.getOrNull()
-    }
-}
 
 private fun decodeSampledBitmap(path: String, reqWidth: Int, reqHeight: Int): android.graphics.Bitmap? {
     val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -1419,12 +1289,4 @@ private fun createVideoThumbnail(file: File): android.graphics.Bitmap? {
     }
 }
 
-private fun detectMediaType(path: String): MediaType {
-    val lowercasePath = path.lowercase(java.util.Locale.getDefault())
-    return when {
-        lowercasePath.endsWith(".mp4") -> MediaType.VIDEO
-        lowercasePath.endsWith(".jpg") || lowercasePath.endsWith(".jpeg") || 
-        lowercasePath.endsWith(".png") || lowercasePath.endsWith(".webp") -> MediaType.IMAGE
-        else -> MediaType.OTHER
-    }
-}
+
