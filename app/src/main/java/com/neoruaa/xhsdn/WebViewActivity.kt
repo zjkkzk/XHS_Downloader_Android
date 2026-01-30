@@ -32,7 +32,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -237,7 +236,7 @@ private fun WebViewScreen(
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(horizontal = 16.dp)
-                    .background(MiuixTheme.colorScheme.background, RoundedCornerShape(18.dp))
+                    .background(MiuixTheme.colorScheme.background, ContinuousRoundedRectangle(18.dp))
             ) {
 
 

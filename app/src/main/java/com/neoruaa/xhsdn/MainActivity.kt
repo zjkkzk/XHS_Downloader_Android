@@ -37,7 +37,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
@@ -119,6 +118,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.combinedClickable
 import java.io.File
 import android.util.LruCache
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.derivedStateOf
+import com.kyant.capsule.ContinuousRoundedRectangle
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
+import top.yukonga.miuix.kmp.extra.LocalWindowListPopupState
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.SuperListPopup
+import top.yukonga.miuix.kmp.extra.WindowListPopup
+import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 
 // 缩略图内存缓存（最多缓存 50 张缩略图）
 private val thumbnailCache = object : LruCache<String, ImageBitmap>(50) {}
@@ -140,7 +150,7 @@ class MainActivity : ComponentActivity() {
                 ActivityCompat.requestPermissions(this, arrayOf(permission), 200)
             }
         }
-        
+
         enableEdgeToEdge()
         com.neoruaa.xhsdn.data.TaskManager.init(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -206,8 +216,8 @@ class MainActivity : ComponentActivity() {
                                 
                                 // Show Notification with Full Content
                                 com.neoruaa.xhsdn.utils.NotificationHelper.showDownloadNotification(
-                                    context, 
-                                    System.currentTimeMillis().toInt(), 
+                                    context,
+                                    System.currentTimeMillis().toInt(),
                                     "开始下载",
                                     clipText, // Full content
                                     false
@@ -541,11 +551,47 @@ private fun MainScreen(
                             modifier = Modifier
                                 .padding(end = 12.dp)
                                 .size(48.dp)
-                                .onGloballyPositioned { overflowButtonBounds = it.boundsInWindow() }
                                 .clickable { menuExpanded = !menuExpanded },
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(text = "···", fontSize = 20.sp)
+                            Icon(
+                                imageVector = MiuixIcons.MoreCircle,
+                                contentDescription = "更多",
+                                modifier = Modifier.size(24.dp)
+                            )
+
+                            val menuItems = listOf("复制文案", "网页爬取")
+
+                            val showMenu = remember { mutableStateOf(false) }
+                            LaunchedEffect(menuExpanded, uiState.isDownloading) {
+                                showMenu.value = menuExpanded && !uiState.isDownloading
+                            }
+
+                            SuperListPopup(
+                                show = showMenu,
+                                alignment = PopupPositionProvider.Align.TopEnd,
+                                onDismissRequest = { menuExpanded = false }
+                            ) {
+                                ListPopupColumn {
+                                    menuItems.forEachIndexed { index, item ->
+                                        DropdownImpl(
+                                            text = item,
+                                            optionSize = menuItems.size,
+                                            isSelected = false,
+                                            onSelectedIndexChange = {
+                                                menuExpanded = false
+                                                if (index == 0) {
+                                                    onCopyText()
+                                                } else if (index == 1) {
+                                                    onWebCrawlFromClipboard()
+                                                }
+                                            },
+                                            index = index,
+//                                            enabled = !uiState.isDownloading
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         Box(
@@ -585,85 +631,6 @@ private fun MainScreen(
             )
         }
 
-        if (menuExpanded) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.45f))
-                    .clickable(
-                        interactionSource = scrimInteraction,
-                        indication = null
-                    ) { menuExpanded = false }
-            )
-
-            val bounds = overflowButtonBounds
-            if (bounds != null) {
-                val gapPx = with(density) { 8.dp.roundToPx() }
-                val menuLeftPx = (bounds.right - menuWidthPx).toInt().coerceAtLeast(with(density) { 8.dp.roundToPx() })
-                val menuTopPx = bounds.bottom.toInt() + gapPx
-                val pointerCenterPxRaw = bounds.center.x - menuLeftPx
-                val pointerCenterPx = pointerCenterPxRaw
-                    .coerceAtLeast(with(density) { 16.dp.toPx() })
-                    .coerceAtMost(menuWidthPx.toFloat() - with(density) { 16.dp.toPx() })
-
-                Popup(
-                    alignment = Alignment.TopStart,
-                    offset = IntOffset(menuLeftPx, menuTopPx),
-                    onDismissRequest = { menuExpanded = false },
-                    properties = PopupProperties(focusable = true)
-                ) {
-                    val triangleWidth = 22.dp
-                    val triangleHeight = 12.dp
-                    val triangleOffsetX = with(density) { pointerCenterPx.toDp() - triangleWidth / 2 }
-                    val bubbleColor = MiuixTheme.colorScheme.surface
-
-                    Column(modifier = Modifier.width(menuWidth)) {
-                        Box(modifier = Modifier.fillMaxWidth()) {
-                            androidx.compose.foundation.Canvas(
-                                modifier = Modifier
-                                    .offset(x = triangleOffsetX)
-                                    .size(triangleWidth, triangleHeight)
-                            ) {
-                                val path = androidx.compose.ui.graphics.Path().apply {
-                                    moveTo(size.width / 2f, 0f)
-                                    lineTo(0f, size.height)
-                                    lineTo(size.width, size.height)
-                                    close()
-                                }
-                                drawPath(path = path, color = bubbleColor)
-                            }
-                        }
-
-                        Card(
-                            cornerRadius = 18.dp,
-                            colors = CardDefaults.defaultColors(color = bubbleColor)
-                        ) {
-                            Column(modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp)) {
-                                TextButton(
-                                    text = "复制文案",
-                                    onClick = {
-                                        menuExpanded = false
-                                        onCopyText()
-                                    },
-                                    enabled = !uiState.isDownloading,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                TextButton(
-                                    text = "网页爬取",
-                                    onClick = {
-                                        menuExpanded = false
-                                        onWebCrawlFromClipboard()
-                                    },
-                                    enabled = !uiState.isDownloading,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -694,40 +661,33 @@ private fun HistoryPage(
     var taskToDelete by remember { mutableStateOf<com.neoruaa.xhsdn.data.DownloadTask?>(null) }
     
     if (taskToDelete != null) {
-        androidx.compose.material3.AlertDialog(
-            shape = RoundedCornerShape(28.dp),
-            containerColor = MiuixTheme.colorScheme.surface,
-            titleContentColor = MiuixTheme.colorScheme.onSurface,
-            textContentColor = MiuixTheme.colorScheme.onSurface,
-            onDismissRequest = { taskToDelete = null },
-            title = { Text("删除任务") },
-            text = { Text("确定要删除这条下载记录吗？已下载的文件不会被删除。") },
-            confirmButton = {
-                top.yukonga.miuix.kmp.basic.Button(
+        SuperDialog(
+            title = "删除任务",
+            summary = "确定要删除这条下载记录吗？已下载的文件不会被删除。",
+            show = remember { mutableStateOf(taskToDelete != null) },
+            onDismissRequest = { taskToDelete = null }
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                TextButton(
+                    text = "取消",
+                    onClick = { taskToDelete = null },
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(12.dp))
+                TextButton(
+                    text = "删除",
                     onClick = {
                         taskToDelete?.let { onDeleteTask(it) }
                         taskToDelete = null
                     },
-                    colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(
-                        Color(0xFFF44336), // Red (backgroundColor)
-                        Color.White        // White (contentColor)
-                    )
-                ) {
-                    Text("删除", color = Color.White)
-                }
-            },
-            dismissButton = {
-                top.yukonga.miuix.kmp.basic.Button(
-                    onClick = { taskToDelete = null },
-                    colors = top.yukonga.miuix.kmp.basic.ButtonDefaults.buttonColors(
-                        MiuixTheme.colorScheme.surfaceVariant, // Greyish (backgroundColor)
-                        MiuixTheme.colorScheme.onSurface       // Black (contentColor)
-                    )
-                ) {
-                    Text("取消", color = MiuixTheme.colorScheme.onSurface)
-                }
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
             }
-        )
+        }
     }
     
     Box(modifier = modifier) {
@@ -750,14 +710,14 @@ private fun HistoryPage(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     filterLabels.forEachIndexed { index, label ->
                         val isSelected = selectedFilter == index
                         Box(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(ContinuousRoundedRectangle(999.dp))
                                 .background(
                                     if (isSelected) MiuixTheme.colorScheme.primary
                                     else MiuixTheme.colorScheme.surfaceVariant
@@ -767,7 +727,8 @@ private fun HistoryPage(
                         ) {
                             Text(
                                 text = label,
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
                                 color = if (isSelected) Color.White else MiuixTheme.colorScheme.onSurface
                             )
                         }
@@ -786,7 +747,7 @@ private fun HistoryPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .clip(ContinuousRoundedRectangle(18.dp))
                             .background(MiuixTheme.colorScheme.surfaceVariant)
                             .padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -993,7 +954,7 @@ private fun TaskCell(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ContinuousRoundedRectangle(28.dp))
             .combinedClickable(
                 onClick = {}, 
                 onLongClick = onDelete
@@ -1001,140 +962,148 @@ private fun TaskCell(
             .background(MiuixTheme.colorScheme.surfaceVariant)
             .padding(12.dp)
     ) {
-        // 顶部：时间 + 状态标签
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(6.dp),
         ) {
-            // 创建时间
-            Text(
-                text = formatTime(task.createdAt),
-                fontSize = 12.sp,
-                color = Color.Gray
-            )
-            
-            // 状态标签
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(statusColor.copy(alpha = 0.15f))
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            // 顶部：时间 + 状态标签
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
+                // 创建时间
                 Text(
-                    text = statusText,
-                    fontSize = 11.sp,
-                    color = statusColor,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // 标题（最多两行）
-        Text(
-            text = task.noteTitle ?: task.noteUrl,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 2,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-        )
-        
-        Spacer(modifier = Modifier.height(4.dp))
-        
-        // 类型 + 文件数量
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "$typeText · ${task.totalFiles} 个文件",
-                fontSize = 12.sp,
-                color = Color.Gray
-            )
-            
-            if (task.failedFiles > 0) {
-                Text(
-                    text = " · ${task.failedFiles} 失败",
+                    text = formatTime(task.createdAt),
                     fontSize = 12.sp,
-                    color = Color(0xFFF44336)
+                    color = Color.Gray,
+                    modifier = Modifier.padding(start = 2.dp)
                 )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // 进度条（仅下载中显示）
-        if (task.totalFiles > 0 && task.status == com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING) {
-            Column {
-                // 进度文本
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+
+                // 状态标签
+                Box(
+                    modifier = Modifier
+                        .clip(ContinuousRoundedRectangle(999.dp))
+                        .background(statusColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "${task.completedFiles}/${task.totalFiles}",
+                        text = statusText,
                         fontSize = 11.sp,
-                        color = Color.Gray
-                    )
-                    Text(
-                        text = "${(task.progress * 100).toInt()}%",
-                        fontSize = 11.sp,
-                        color = Color.Gray
+                        color = statusColor,
+                        fontWeight = FontWeight.Medium
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                // 进度条
-                LinearProgressIndicator(
-                    progress = task.progress,
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 标题（最多两行）
+            Text(
+                text = task.noteTitle ?: task.noteUrl,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // 类型 + 文件数量
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "$typeText · ${task.totalFiles} 个文件",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+
+                if (task.failedFiles > 0) {
+                    Text(
+                        text = " · ${task.failedFiles} 失败",
+                        fontSize = 12.sp,
+                        color = Color(0xFFF44336)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 进度条（仅下载中显示）
+            if (task.totalFiles > 0 && task.status == com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING) {
+                Column {
+                    // 进度文本
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${task.completedFiles}/${task.totalFiles}",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                        Text(
+                            text = "${(task.progress * 100).toInt()}%",
+                            fontSize = 11.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    // 进度条
+                    LinearProgressIndicator(
+                        progress = task.progress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(ContinuousRoundedRectangle(3.dp))
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // 媒体预览网格（最后一个任务显示）
+            if (mediaItems.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-        
-        // 媒体预览网格（最后一个任务显示）
-        if (mediaItems.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-            ) {
-                mediaItems.forEach { item ->
-                    Box(
-                        modifier = Modifier
-                            .size(60.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { onMediaClick(item) }
-                    ) {
-                        val bitmap = rememberThumbnail(item)
-                        bitmap?.let {
-                            Image(
-                                bitmap = it,
-                                contentDescription = null,
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                        .horizontalScroll(rememberScrollState())
+                ) {
+                    mediaItems.forEach { item ->
+                        Box(
+                            modifier = Modifier
+                                .size(60.dp)
+                                .background(MiuixTheme.colorScheme.surface, shape = ContinuousRoundedRectangle(8.dp))
+                                .clickable { onMediaClick(item) }
+                        ) {
+                            val bitmap = rememberThumbnail(item)
+                            bitmap?.let {
+                                Image(
+                                    bitmap = it,
+                                    contentDescription = null,
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                        .clip(ContinuousRoundedRectangle(8.dp))
+                                )
+                            }
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(12.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp))
         }
-        
+
         // 操作按钮行
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            val isDownloading = task.status == com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING || 
+            val isDownloading = task.status == com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING ||
                                 task.status == com.neoruaa.xhsdn.data.TaskStatus.QUEUED
-            
+
             if (isDownloading) {
                  Button(
                      onClick = onStop,
@@ -1144,7 +1113,7 @@ private fun TaskCell(
                      Text("停止", color = Color.White)
                  }
             } else {
-                
+
                 // 等待用户选择状态 (显示 坚持下载/网页爬取)
                 if (task.status == com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER) {
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -1182,18 +1151,18 @@ private fun TaskCell(
                 } else {
                     // 复制链接按钮
                     TextButton(
-                        text = "复制",
+                        text = "复制链接",
                         onClick = onCopyUrl,
                         modifier = Modifier.weight(1f)
                     )
-                    
+
                     // 爬取按钮（通过网页爬取功能打开）
                     TextButton(
-                        text = "爬取",
+                        text = "网页爬取",
                         onClick = onWebCrawl,
                         modifier = Modifier.weight(1f)
                     )
-                    
+
                     // 重试按钮（仅失败任务显示）
                     if (task.status == com.neoruaa.xhsdn.data.TaskStatus.FAILED) {
                         Button(
@@ -1241,7 +1210,7 @@ private fun FilesPage(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(ContinuousRoundedRectangle(18.dp))
                         .background(MiuixTheme.colorScheme.surfaceVariant)
                 ) {
                     Text(
@@ -1274,7 +1243,7 @@ private fun MediaPreview(item: MediaItem, onClick: () -> Unit) {
     val aspectRatio = rememberAspectRatio(item) ?: 0.75f
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(ContinuousRoundedRectangle(18.dp))
             .background(MiuixTheme.colorScheme.surfaceVariant)
             .clickable { onClick() }
     ) {

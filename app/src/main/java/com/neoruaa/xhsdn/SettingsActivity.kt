@@ -549,7 +549,7 @@ private fun TokenChip(
     val borderColor = MiuixTheme.colorScheme.surface
     Card(
         modifier = modifier
-            .border(width = 1.dp, color = borderColor, shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp))
+            .border(width = 1.dp, color = borderColor, shape = ContinuousRoundedRectangle(16.dp))
             .then(if (enabled) Modifier.clickable { onInsert(token.placeholder) } else Modifier),
         cornerRadius = 14.dp,
         colors = CardDefaults.defaultColors(
