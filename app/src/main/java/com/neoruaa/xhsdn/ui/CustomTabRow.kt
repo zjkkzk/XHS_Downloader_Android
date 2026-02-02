@@ -509,7 +509,7 @@ object TabRowDefaults {
      */
     @Composable
     fun tabRowColors(
-        backgroundColor: Color = MiuixTheme.colorScheme.secondaryContainer,
+        backgroundColor: Color = MiuixTheme.colorScheme.surfaceContainerHigh,
         contentColor: Color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         selectedBackgroundColor: Color = MiuixTheme.colorScheme.surfaceContainer,
         selectedContentColor: Color = MiuixTheme.colorScheme.onBackground,

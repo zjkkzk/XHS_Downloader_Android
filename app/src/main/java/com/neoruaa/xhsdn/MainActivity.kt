@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -98,7 +99,9 @@ import androidx.compose.foundation.combinedClickable
 import java.io.File
 import android.util.LruCache
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.ui.platform.LocalConfiguration
 import com.kyant.capsule.ContinuousRoundedRectangle
+import com.neoruaa.xhsdn.ui.TabRowDefaults
 import com.neoruaa.xhsdn.ui.TabRowWithContour
 import com.neoruaa.xhsdn.viewmodels.MainUiState
 import com.neoruaa.xhsdn.viewmodels.MainViewModel
@@ -107,7 +110,6 @@ import com.neoruaa.xhsdn.viewmodels.MediaType
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
-import top.yukonga.miuix.kmp.basic.TabRowDefaults
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.extra.SuperListPopup
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
@@ -804,12 +806,20 @@ private fun HistoryPage(
                 val waitingCount = tasks.count { it.status == com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER }
                 val failedCount = tasks.count { it.status == com.neoruaa.xhsdn.data.TaskStatus.FAILED }
                 val filterLabels = listOf("全部", "等待选择($waitingCount)", "失败($failedCount)")
-
+                val configuration = LocalConfiguration.current
                 TabRowWithContour(
                     tabs = filterLabels,
                     selectedTabIndex = selectedFilter,
                     fontSize = 14.sp,
-                    cornerRadius = 13.dp,
+                    height = 40.dp,
+                    colors = TabRowDefaults.tabRowColors(
+                       selectedBackgroundColor = if (configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES) {
+                           Color(0xFF434343)
+                       } else {
+                           Color(0xFFFFFFFF)
+                       }
+                    ),
+                    itemSpacing = 2.dp,
                     onTabSelected = { selectedFilter = it },
                     modifier = Modifier
                         .fillMaxWidth()
