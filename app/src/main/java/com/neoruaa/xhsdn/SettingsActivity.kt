@@ -64,6 +64,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -297,7 +298,7 @@ private fun SettingsScreen(
                 navigationIcon = {
                     Icon(
                         imageVector = MiuixIcons.Back,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.back),
                         modifier = Modifier
                             .padding(start = 26.dp)
                             .clickable { onBack() }
@@ -314,207 +315,207 @@ private fun SettingsScreen(
                 .background(MiuixTheme.colorScheme.surface)
                 .padding(padding),
             contentPadding = PaddingValues(bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+//            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                SmallTitle(text = "下载选项")
+                Spacer(modifier = Modifier.size(12.dp))
+            }
+
+            item {
+                SmallTitle(stringResource(R.string.download_options))
+            }
+
+            item {
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp),
-                    cornerRadius = 18.dp,
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.background)
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PreferenceRow(
-                            title = "生成 Live Photo",
-                            description = "关闭后 Live Photo 将作为图片+视频分别下载",
-                            checked = uiState.createLivePhotos,
-                            onCheckedChange = onCreateLivePhotosChange
-                        )
-                        PreferenceRow(
-                            title = "调试通知",
-                            description = "显示详细的下载调试信息",
-                            checked = uiState.debugNotificationEnabled,
-                            onCheckedChange = onDebugNotificationChange
-                        )
-                    }
+                    MiuixSwitchWidget(
+                        title = stringResource(R.string.create_live_photos),
+                        description = stringResource(R.string.create_live_photos_desc),
+                        checked = uiState.createLivePhotos,
+                        onCheckedChange = onCreateLivePhotosChange
+                    )
+
+                    MiuixSwitchWidget(
+                        title = stringResource(R.string.debug_notifications),
+                        description = stringResource(R.string.debug_notifications_desc),
+                        checked = uiState.debugNotificationEnabled,
+                        onCheckedChange = onDebugNotificationChange
+                    )
                 }
             }
-            
+
             item {
-                SmallTitle(text = "剪贴板")
+                SmallTitle(stringResource(R.string.clipboard))
+            }
+
+            item {
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp),
-                    cornerRadius = 18.dp,
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.background)
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PreferenceRow(
-                            title = "显示剪贴板气泡",
-                            description = "检测到链接时显示提示卡片",
-                            checked = uiState.showClipboardBubble,
-                            onCheckedChange = onShowClipboardBubbleChange
-                        )
-                        PreferenceRow(
-                            title = "自动读取剪贴板并下载",
-                            description = "检测到链接时自动开始下载",
-                            checked = uiState.autoReadClipboard,
-                            onCheckedChange = onAutoReadClipboardChange
-                        )
-                    }
+                    MiuixSwitchWidget(
+                        title = stringResource(R.string.show_clipboard_bubble),
+                        description = stringResource(R.string.show_clipboard_bubble_desc),
+                        checked = uiState.showClipboardBubble,
+                        onCheckedChange = onShowClipboardBubbleChange
+                    )
+
+                    MiuixSwitchWidget(
+                        title = stringResource(R.string.auto_read_clipboard),
+                        description = stringResource(R.string.auto_read_clipboard_desc),
+                        checked = uiState.autoReadClipboard,
+                        onCheckedChange = onAutoReadClipboardChange
+                    )
                 }
             }
-            
+
             item {
-                SmallTitle(text = "文件命名")
+                SmallTitle(stringResource(R.string.file_naming))
+            }
+
+            item {
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp),
-                    cornerRadius = 18.dp,
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.background)
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        PreferenceRow(
-                            title = "启用自定义命名",
-                            description = "使用模板命名文件",
-                            checked = uiState.useCustomNaming,
-                            onCheckedChange = onUseCustomNamingChange
-                        )
-                        TextField(
-                            value = uiState.template,
-                            onValueChange = onTemplateChange,
-                            modifier = Modifier.fillMaxWidth().clip(ContinuousRoundedRectangle(14.dp)),
-                            label = "命名模板",
-                            enabled = uiState.useCustomNaming,
-                            singleLine = false,
-                            maxLines = 3,
-                            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = { }),
-                            trailingIcon = {
-                                if (uiState.useCustomNaming) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Refresh,
-                                        contentDescription = "重置模板",
-                                        modifier = Modifier
-                                            .padding(end = 16.dp)
-                                            .size(20.dp)
-                                            .clickable { onResetTemplate() }
-                                    )
-                                }
-                            },
-                            cornerRadius = 14.dp
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-//                            TextButton(text = "重置模板", onClick = onResetTemplate, enabled = uiState.useCustomNaming)
-                            Text(
-//                                modifier = Modifier.padding(start = 10.dp),
-                                text = "点击下方占位符可插入到光标处",
-                                color = Color.Gray
-                            )
-                        }
-                        TokenGrid(
-                            tokens = uiState.tokens,
-                            enabled = uiState.useCustomNaming,
-                            onInsert = { placeholder ->
-                                val current = uiState.template
-                                val selectionStart = current.selection.start.coerceAtLeast(0)
-                                val selectionEnd = current.selection.end.coerceAtLeast(0)
-                                val min = minOf(selectionStart, selectionEnd)
-                                val max = maxOf(selectionStart, selectionEnd)
-                                val newText = buildString {
-                                    append(current.text.substring(0, min))
-                                    append(placeholder)
-                                    append(current.text.substring(max))
-                                }
-                                val newSelection = min + placeholder.length
-                                onTemplateChange(
-                                    TextFieldValue(
-                                        text = newText,
-                                        selection = androidx.compose.ui.text.TextRange(newSelection)
-                                    )
+                    MiuixSwitchWidget(
+                        title = stringResource(R.string.enable_custom_naming),
+                        description = stringResource(R.string.enable_custom_naming_desc),
+                        checked = uiState.useCustomNaming,
+                        onCheckedChange = onUseCustomNamingChange
+                    )
+
+                    TextField(
+                        value = uiState.template,
+                        onValueChange = onTemplateChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .clip(ContinuousRoundedRectangle(14.dp)),
+                        label = stringResource(R.string.naming_template),
+                        enabled = uiState.useCustomNaming,
+                        singleLine = false,
+                        maxLines = 3,
+                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { }),
+                        trailingIcon = {
+                            if (uiState.useCustomNaming) {
+                                Icon(
+                                    imageVector = MiuixIcons.Refresh,
+                                    contentDescription = stringResource(R.string.reset_template),
+                                    modifier = Modifier
+                                        .padding(end = 16.dp)
+                                        .size(20.dp)
+                                        .clickable { onResetTemplate() }
                                 )
                             }
-                        )
-                    }
+                        }
+                    )
+
+                    Text(
+                        text = stringResource(R.string.insert_placeholder_hint),
+                        modifier = Modifier
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    )
+
+                    TokenGrid(
+                        tokens = uiState.tokens,
+                        enabled = uiState.useCustomNaming,
+                        onInsert = { placeholder ->
+                            val current = uiState.template
+                            val selectionStart = current.selection.start.coerceAtLeast(0)
+                            val selectionEnd = current.selection.end.coerceAtLeast(0)
+                            val min = minOf(selectionStart, selectionEnd)
+                            val max = maxOf(selectionStart, selectionEnd)
+                            val newText = buildString {
+                                append(current.text.substring(0, min))
+                                append(placeholder)
+                                append(current.text.substring(max))
+                            }
+                            val newSelection = min + placeholder.length
+                            onTemplateChange(
+                                TextFieldValue(
+                                    text = newText,
+                                    selection = androidx.compose.ui.text.TextRange(newSelection)
+                                )
+                            )
+                        }
+                    )
                 }
             }
+
             item {
-                SmallTitle(text = "关于")
+                SmallTitle(stringResource(R.string.about))
+            }
+
+            item {
                 Card(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 16.dp, end = 16.dp),
-                    cornerRadius = 18.dp,
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.background)
+                        .padding(horizontal = 12.dp)
+                        .padding(bottom = 12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = "版本号")
-                            Text(text = "v${BuildConfig.VERSION_NAME}", color = Color.Gray)
-                        }
-                    }
+                    BasicComponent(
+                        title = stringResource(R.string.version),
+                        summary = stringResource(R.string.version_with_prefix, BuildConfig.VERSION_NAME),
+                        onClick = { /* No action */ }
+                    )
                 }
-                Spacer(modifier = Modifier.height(10.dp))
-                        Button(
-                            onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/NEORUAA/XHS_Downloader_Android"))
-                                context.startActivity(intent)
-                            },
-                            colors = ButtonDefaults.buttonColorsPrimary(),
-                            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp),
-                            cornerRadius = 18.dp
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Update,
-                                contentDescription = "GitHub",
-                                modifier = Modifier.padding(end = 8.dp),
-                                tint = Color.White
-                            )
-                            Text(
-                                text = "前往 GitHub",
-                                color = Color.White
-                            )
-                        }
-
+                Button(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/NEORUAA/XHS_Downloader_Android"))
+                        context.startActivity(intent)
+                    },
+                    colors = ButtonDefaults.buttonColorsPrimary(),
+                    cornerRadius = 18.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Update,
+                        contentDescription = stringResource(R.string.github_link),
+                        modifier = Modifier.padding(end = 8.dp),
+                        tint = Color.White
+                    )
+                    Text(
+                        text = stringResource(R.string.visit_github),
+                        color = Color.White
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PreferenceRow(
+private fun MiuixSwitchWidget(
     title: String,
-    description: String,
+    description: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title)
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = description, color = Color.Gray)
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    val toggleAction = {
+        onCheckedChange(!checked)
     }
+
+    BasicComponent(
+        title = title,
+        summary = description,
+        onClick = toggleAction,
+        endActions = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        }
+    )
 }
 
 @Composable
@@ -525,7 +526,8 @@ private fun TokenGrid(
 ) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.padding(top = 0.dp, start = 16.dp, end = 16.dp, bottom = 16.dp)
     ) {
         tokens.forEach { token ->
             TokenChip(
@@ -553,18 +555,24 @@ private fun TokenChip(
             .then(if (enabled) Modifier.clickable { onInsert(token.placeholder) } else Modifier),
         cornerRadius = 14.dp,
         colors = CardDefaults.defaultColors(
-            color = if (enabled) MiuixTheme.colorScheme.surfaceVariant else MiuixTheme.colorScheme.surfaceVariant.copy(
-                alpha = 0.5f
-            )
-        ),
+            color = if (enabled) MiuixTheme.colorScheme.surfaceVariant else MiuixTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     ) {
         Column(
             modifier = Modifier
                 .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Text(text = stringResource(token.labelResId))
-            Text(text = token.placeholder, color = Color.Gray)
+            Text(
+                text = stringResource(token.labelResId),
+                fontSize = 16.sp,
+                color = if (enabled) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            )
+            Text(
+                text = token.placeholder,
+                fontSize = 14.sp,
+                color = if (enabled) MiuixTheme.colorScheme.onSurfaceVariantSummary else MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = 0.5f)
+            )
         }
     }
 }

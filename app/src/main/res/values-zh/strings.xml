@@ -22,7 +22,7 @@
     <string name="apply">应用</string>
     <string name="settings_saved">设置保存成功</string>
     <string name="open_github_repository">打开GitHub仓库</string>
-    <string name="create_live_photos">创建安卓动态照片（将图片和视频合并为单个文件）</string>
+    <string name="create_live_photos">创建安卓动态照片</string>
     <string name="enable_custom_naming">启用自定义命名格式</string>
     <string name="custom_format_label">当前命名格式</string>
     <string name="custom_format_hint">例如：{title}_{publishTime}_{downloadTimestamp}</string>
@@ -67,4 +67,37 @@
     <string name="overall_download_progress">总体下载进度：%1$d%%</string>
     <string name="items_completed">个项目已完成</string>
     <string name="items_remaining">个项目剩余</string>
+    <string name="accessibility_service_description">启用此服务以允许小红书下载器在后台监听您的剪贴板，自动检测小红书链接并开始下载。</string>
+
+    <!-- Settings category titles -->
+    <string name="download_options">下载选项</string>
+    <string name="clipboard">剪贴板</string>
+    <string name="file_naming">文件命名</string>
+    <string name="about">关于</string>
+
+    <!-- Download option strings -->
+    <string name="create_live_photos_desc">关闭后 Live Photo 将作为图片+视频分别下载</string>
+    <string name="debug_notifications">调试通知</string>
+    <string name="debug_notifications_desc">显示详细的下载调试信息</string>
+
+    <!-- Clipboard option strings -->
+    <string name="show_clipboard_bubble">显示剪贴板气泡</string>
+    <string name="show_clipboard_bubble_desc">检测到链接时显示提示卡片</string>
+    <string name="auto_read_clipboard">自动读取剪贴板并下载</string>
+    <string name="auto_read_clipboard_desc">检测到链接时自动开始下载</string>
+
+    <!-- File naming option strings -->
+    <string name="enable_custom_naming_desc">使用模板命名文件</string>
+    <string name="naming_template">命名模板</string>
+    <string name="reset_template">重置模板</string>
+    <string name="insert_placeholder_hint">点击下方占位符可插入到光标处</string>
+
+    <!-- About section strings -->
+    <string name="version">版本号</string>
+    <string name="visit_github">前往 GitHub</string>
+    <string name="github_link">GitHub 链接</string>
+
+    <!-- Additional strings for i18n -->
+    <string name="back">返回</string>
+    <string name="version_with_prefix">v%s</string>
 </resources>
