@@ -929,6 +929,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return null // For now, return null - the actual title extraction would happen elsewhere
     }
 
+    fun clearHistory() {
+        viewModelScope.launch {
+            TaskManager.clearAllTasks()
+            appendStatus("历史记录已清除")
+        }
+    }
+
     private fun copyToClipboard(text: String) {
         val clipboard = getApplication<Application>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("xhsdn", text))

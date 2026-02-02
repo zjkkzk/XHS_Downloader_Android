@@ -269,7 +269,7 @@ object TaskManager {
     /**
      * 清空所有任务
      */
-    fun deleteAllTasks() {
+    fun clearAllTasks() {
         _tasks.value = emptyList()
         saveTasks()
     }

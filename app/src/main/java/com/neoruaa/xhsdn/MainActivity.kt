@@ -395,6 +395,7 @@ class MainActivity : ComponentActivity() {
                          }
                          com.neoruaa.xhsdn.data.BackgroundDownloadManager.stopTask(task.id)
                     },
+                    onClearHistory = { viewModel.clearHistory() },
                     detectedXhsLink = detectedXhsLink,
                     onDismissPrompt = { detectedXhsLink = null }
                 )
@@ -571,6 +572,7 @@ private fun MainScreen(
     onCopyText: () -> Unit,
     onOpenSettings: () -> Unit,
     onWebCrawlFromClipboard: () -> Unit,
+    onClearHistory: () -> Unit,
     onMediaClick: (MediaItem) -> Unit,
     onCopyUrl: (String) -> Unit,
     onBrowseUrl: (String) -> Unit,
@@ -592,6 +594,9 @@ private fun MainScreen(
     val scrimInteraction = remember { MutableInteractionSource() }
     val menuWidth = 180.dp
     val menuWidthPx = with(density) { menuWidth.roundToPx() }
+
+    // 清除历史记录确认对话框状态
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
@@ -616,7 +621,7 @@ private fun MainScreen(
 //                                modifier = Modifier.size(24.dp)
                             )
 
-                            val menuItems = listOf("复制文案", "网页爬取")
+                            val menuItems = listOf("复制文案", "网页爬取", "清除历史记录")
 
                             val showMenu = remember { mutableStateOf(false) }
                             LaunchedEffect(menuExpanded, uiState.isDownloading) {
@@ -640,12 +645,45 @@ private fun MainScreen(
                                                     onCopyText()
                                                 } else if (index == 1) {
                                                     onWebCrawlFromClipboard()
+                                                } else if (index == 2) {
+                                                    showClearHistoryDialog = true
                                                 }
                                             },
                                             index = index,
 //                                            enabled = !uiState.isDownloading
                                         )
                                     }
+                                }
+                            }
+                        }
+
+                        // 清除历史记录确认对话框
+                        if (showClearHistoryDialog) {
+                            SuperDialog(
+                                title = "清除历史记录",
+                                summary = "确定要删除全部下载记录吗？已下载的文件不会被删除。",
+                                show = remember { mutableStateOf(true) },
+                                onDismissRequest = { showClearHistoryDialog = false }
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                ) {
+                                    TextButton(
+                                        text = "取消",
+                                        onClick = { showClearHistoryDialog = false },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    TextButton(
+                                        text = "删除",
+                                        onClick = {
+                                            onClearHistory()
+                                            showClearHistoryDialog = false
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        colors = ButtonDefaults.textButtonColorsPrimary()
+                                    )
                                 }
                             }
                         }
