@@ -1924,7 +1924,7 @@ public class XHSDownloader {
                        " and video: " + actualTempVideoFile.getAbsolutePath() +
                        " -> output: " + livePhotoFile.getAbsolutePath());
 
-                boolean livePhotoCreated = LivePhotoCreator.createLivePhoto(actualTempImageFile, actualTempVideoFile, livePhotoFile);
+                boolean livePhotoCreated = LivePhotoCreator.createLivePhoto(actualTempImageFile, actualTempVideoFile, livePhotoFile, context);
 
                 if (livePhotoCreated) {
                     // Additional check: verify if the created live photo file can be opened by checking if it was created properly
