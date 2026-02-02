@@ -579,10 +579,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun onWebCrawlResult(urls: List<String>, content: String?, taskId: Long? = null) {
+        appendStatus("onWebCrawlResult 被调用，URL数量: ${urls.size}")
+
         if (urls.isEmpty()) {
             appendStatus("网页未发现可下载的资源")
             return
         }
+
+        appendStatus("接收到 ${urls.size} 个原始URL")
 
         // Filter duplicate videos logic
         // 1. Separate videos and images
@@ -594,6 +598,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         val (videoUrls, imageUrls) = urls.partition { isVideo(it) }
+
+        appendStatus("分离后: 视频 ${videoUrls.size} 个, 图片 ${imageUrls.size} 个")
 
         // 2. Deduplicate videos (Prioritize HD from sns-video-bd.xhscdn.com)
         // Since xhs_extractor.js pushes the main video (originVideoKey) first,
@@ -618,6 +624,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 3. Combine and deduplicate everything
         val finalUrls = (imageUrls + finalVideoUrls).distinct()
 
+        appendStatus("去重后最终URL数量: ${finalUrls.size}")
+
         if (finalUrls.isEmpty()) {
              appendStatus("过滤后未发现有效资源")
              return
@@ -626,13 +634,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         downloadedCount = 0
         totalMediaCount = finalUrls.size
 
+        // Update task status to DOWNLOADING if taskId is provided
+        taskId?.let { id ->
+            TaskManager.updateTaskStatus(id, TaskStatus.DOWNLOADING)
+        }
+
         // Reset download tracking variables for web crawl
         resetDownloadTracking()
 
         _uiState.update {
             it.copy(
                 isDownloading = true,
-                progressLabel = "",
+                progressLabel = "$downloadedCount/$totalMediaCount",
                 progress = 0f,
                 showWebCrawl = false,
                 showVideoWarning = false
@@ -652,9 +665,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 currentFileProgress =
                                     0f // Reset current file progress when file is completed
                                 updateProgress()
-                                // If we have a taskId, add the file path to that task
+                                // If we have a taskId, update the task progress
                                 taskId?.let { id ->
                                     TaskManager.addFilePath(id, filePath)
+                                    // Update the completed files count in the task manager
+                                    TaskManager.updateProgress(id, downloadedCount, 0)
                                 }
                             }
                         }
@@ -738,19 +753,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             // Reset the stop flag for new download
             downloader.resetStopDownload()
-            // Extract all valid XHS URLs from the input - prefer task URL if taskId is provided
-            val sourceUrl = taskId?.let { TaskManager.getTaskById(it)?.noteUrl } ?: currentUrl
-            val url: List<String> = sourceUrl?.let { downloader.extractLinks(it) }.orEmpty()
-            val postIdTemp: String =
-                if (url.isNotEmpty()) downloader.extractPostId(url.firstOrNull()) ?: currentDownloadStartTime.toString()
-                else currentDownloadStartTime.toString()
+
+            // For web crawl, we already have the URLs from the WebView, so we don't need to extract them again
+            // Use the finalUrls that were passed to this function
+            val postIdTemp = currentDownloadStartTime.toString()
             val postId = "webview_$postIdTemp"
+
             try {
+                appendStatus("开始下载 ${finalUrls.size} 个文件")
+
                 finalUrls.forEachIndexed { index, rawUrl ->
+                    appendStatus("正在下载第 ${index + 1}/${finalUrls.size} 个文件: $rawUrl")
                     val transformed = downloader.transformXhsCdnUrl(rawUrl).takeUnless { it.isNullOrEmpty() } ?: rawUrl
                     val extension = determineFileExtension(transformed)
                     val fileName = "${postId}_${index + 1}.$extension"
+                    appendStatus("准备下载文件: $fileName, URL: $transformed")
                     downloader.downloadFile(transformed, fileName)
+                    appendStatus("完成下载第 ${index + 1} 个文件")
                 }
                 withContext(Dispatchers.Main) {
                     updateProgress()
@@ -763,6 +782,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     appendStatus("网页转存出错: ${e.message}")
+                    e.printStackTrace() // Print stack trace for debugging
                     // Mark task as failed if taskId was provided
                     taskId?.let { id ->
                         TaskManager.completeTask(id, false, "网页转存出错: ${e.message}")
@@ -901,6 +921,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun appendStatus(message: String) {
         _uiState.update { it.copy(status = it.status + message) }
+        Log.d("XHSDownloader", message)
     }
 
     private fun extractTitleFromUrl(url: String): String? {

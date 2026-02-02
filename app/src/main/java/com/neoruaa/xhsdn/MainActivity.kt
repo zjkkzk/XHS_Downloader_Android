@@ -1,6 +1,7 @@
 package com.neoruaa.xhsdn
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -9,6 +10,8 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -112,6 +115,26 @@ private val thumbnailCache = object : LruCache<String, ImageBitmap>(50) {}
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
+
+    private val detailActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        when (result.resultCode) {
+            RESULT_FIRST_USER -> { // Copy URL
+                // Just show a toast since URL is already copied in DetailActivity
+                showToast("已复制链接")
+            }
+            RESULT_FIRST_USER + 1 -> { // Web Crawl
+                // Handle web crawl from the result data
+                val webCrawlUrl = result.data?.getStringExtra("web_crawl_url")
+                if (!webCrawlUrl.isNullOrEmpty()) {
+                    // Trigger web crawl as a new task
+                    viewModel.updateUrl(webCrawlUrl)
+                    ensureStoragePermission {
+                        viewModel.startDownload { showToast(it) }
+                    }
+                }
+            }
+        }
+    }
 
     private val _autoDownloadIntentUrl = mutableStateOf<String?>(null)
 
@@ -312,10 +335,20 @@ class MainActivity : ComponentActivity() {
                         val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         val clipText = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
                         if (clipText.isNotEmpty()) {
-                            viewModel.updateUrl(clipText)
-                            detectedXhsLink = null
+                            // Clean the URL using the same method as other places
+                            val cleanUrl = com.neoruaa.xhsdn.utils.UrlUtils.extractFirstUrl(clipText)
+                            if (cleanUrl != null) {
+                                val webViewIntent = Intent(this, WebViewActivity::class.java).apply {
+                                    putExtra("url", cleanUrl)
+                                    // Don't pass task_id here - let WebViewActivity create the task when user clicks "爬取"
+                                }
+                                startActivityForResult(webViewIntent, WEBVIEW_REQUEST_CODE)
+
+                                detectedXhsLink = null
+                            } else {
+                                showToast("未找到有效链接，请重新输入")
+                            }
                         }
-                        launchWebView(clipText)
                     },
                     onMediaClick = { openFile(it) },
                     onCopyUrl = { url ->
@@ -477,14 +510,49 @@ class MainActivity : ComponentActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == WEBVIEW_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+            // Debug: Show that we received the result
+//            showToast("收到WebView结果")
+
             val urls = data.getStringArrayListExtra("image_urls") ?: emptyList()
             val content = data.getStringExtra("content_text")
-            val taskId = data.getLongExtra("task_id", -1L).takeIf { it > 0 }
+            var taskId = data.getLongExtra("task_id", -1L).takeIf { it > 0 }
+
             if (urls.isNotEmpty()) {
-                showToast("开始爬取，请等待任务完成")
-                viewModel.onWebCrawlResult(urls, content, taskId)
+                // Debug: Show how many URLs were received
+//                showToast("收到${urls.size}个URL")
+
+                // Check if a task ID was passed from WebViewActivity (meaning task was already created)
+                val taskToUse = if (taskId != null) {
+                    // Task was already created in WebViewActivity
+                    taskId
+                } else {
+                    // Create a new task when URLs are returned from WebViewActivity
+                    val webViewUrl = data.getStringExtra("url") ?: "Unknown URL"
+                    val newTaskId = com.neoruaa.xhsdn.data.TaskManager.createTask(
+                        noteUrl = webViewUrl,
+                        noteTitle = null,
+                        noteType = com.neoruaa.xhsdn.data.NoteType.UNKNOWN,
+                        totalFiles = urls.size
+                    )
+
+                    // Update the task status to DOWNLOADING immediately since we have the URLs
+                    com.neoruaa.xhsdn.data.TaskManager.updateTaskStatus(newTaskId, com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING)
+
+                    // Debug: Show that task was created
+//                    showToast("已创建任务ID: $newTaskId")
+                    newTaskId
+                }
+
+//                showToast("开始爬取，请等待任务完成")
+//                showToast("准备调用viewModel.onWebCrawlResult，URL数量: ${urls.size}")
+                viewModel.onWebCrawlResult(urls, content, taskToUse)
             } else {
                 showToast("未发现可下载的资源")
+            }
+        } else {
+            // Debug: Show that result was not as expected
+            if (requestCode == WEBVIEW_REQUEST_CODE) {
+                showToast("WebView返回结果异常: resultCode=$resultCode")
             }
         }
     }
@@ -737,7 +805,7 @@ private fun HistoryPage(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
-                            .clip(ContinuousRoundedRectangle(28.dp))
+                            .clip(ContinuousRoundedRectangle(18.dp))
                             .background(MiuixTheme.colorScheme.surfaceVariant)
                             .padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
@@ -952,10 +1020,16 @@ private fun TaskCell(
         com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER -> "等待选择"
     }
     
-    val typeText = when (task.noteType) {
-        com.neoruaa.xhsdn.data.NoteType.IMAGE -> "图文"
-        com.neoruaa.xhsdn.data.NoteType.VIDEO -> "视频"
-        com.neoruaa.xhsdn.data.NoteType.UNKNOWN -> "未知"
+    val typeText = when {
+        // Check if this is a web crawl task (created from WebViewActivity)
+        task.noteType == com.neoruaa.xhsdn.data.NoteType.UNKNOWN &&
+        (task.noteUrl?.contains("xhslink.com") == true ||
+         task.noteUrl?.contains("xiaohongshu.com") == true ||
+         task.noteUrl?.startsWith("http") == true && task.totalFiles > 0) -> "网页爬取"
+        task.noteType == com.neoruaa.xhsdn.data.NoteType.IMAGE -> "图文"
+        task.noteType == com.neoruaa.xhsdn.data.NoteType.VIDEO -> "视频"
+        task.noteType == com.neoruaa.xhsdn.data.NoteType.UNKNOWN -> "未知"
+        else -> "未知"
     }
     
     Column(
@@ -972,7 +1046,7 @@ private fun TaskCell(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(6.dp),
+                .padding(4.dp),
         ) {
             // 顶部：时间 + 状态标签
             Row(
@@ -1102,6 +1176,10 @@ private fun TaskCell(
             }
         }
 
+        if (task.status != com.neoruaa.xhsdn.data.TaskStatus.COMPLETED) {
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
         // 操作按钮行
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1111,7 +1189,6 @@ private fun TaskCell(
                                 task.status == com.neoruaa.xhsdn.data.TaskStatus.QUEUED
 
             if (isDownloading) {
-                 Spacer(modifier = Modifier.height(12.dp))
                  Button(
                      onClick = onStop,
                      modifier = Modifier.weight(1f),
@@ -1123,7 +1200,6 @@ private fun TaskCell(
 
                 // 等待用户选择状态 (显示 坚持下载/网页爬取)
                 if (task.status == com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER) {
-                    Spacer(modifier = Modifier.height(12.dp))
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // 提示语
                         Text(
@@ -1173,7 +1249,6 @@ private fun TaskCell(
 
                     // 重试按钮（仅失败任务显示）
                     if (task.status == com.neoruaa.xhsdn.data.TaskStatus.FAILED) {
-                        Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = onRetry,
                             modifier = Modifier.weight(1f),

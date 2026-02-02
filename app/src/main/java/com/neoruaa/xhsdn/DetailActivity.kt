@@ -3,6 +3,7 @@ package com.neoruaa.xhsdn
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
@@ -76,6 +77,7 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import java.io.File
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
@@ -201,15 +203,26 @@ class DetailActivity : ComponentActivity() {
                     onBack = { finish() },
                     onMediaClick = { mediaItem ->
                         // 处理媒体项点击事件
-                        val intent = Intent().apply {
-                            action = Intent.ACTION_VIEW
-                            setDataAndType(android.net.Uri.fromFile(File(mediaItem.path)), getMimeType(mediaItem.type))
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        }
                         try {
+                            val file = File(mediaItem.path)
+                            val uri = FileProvider.getUriForFile(
+                                this@DetailActivity,
+                                "${packageName}.fileprovider",
+                                file
+                            )
+                            
+                            val intent = Intent().apply {
+                                action = Intent.ACTION_VIEW
+                                setDataAndType(uri, getMimeType(mediaItem.type))
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            }
+                            
+                            // 授予临时权限给目标应用
+                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             startActivity(intent)
                         } catch (e: Exception) {
                             e.printStackTrace()
+                            Toast.makeText(this@DetailActivity, "无法打开文件: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     },
                     onDeleteMedia = { mediaItem ->
@@ -225,15 +238,19 @@ class DetailActivity : ComponentActivity() {
                         }
                     },
                     onWebCrawl = {
-                        // Open web crawl directly from DetailActivity
+                        // Launch web crawl directly - task will be created in WebViewActivity when user clicks "爬取"
                         if (!noteUrl.isNullOrEmpty()) {
-                            // Use the same URL extraction as in MainActivity
                             val cleanUrl = com.neoruaa.xhsdn.utils.UrlUtils.extractFirstUrl(noteUrl)
                             if (cleanUrl != null) {
+                                // Launch WebViewActivity for the web crawl
                                 val webViewIntent = Intent(this, WebViewActivity::class.java).apply {
                                     putExtra("url", cleanUrl)
+                                    // Don't pass task_id here - let WebViewActivity create the task when user clicks "爬取"
                                 }
-                                startActivity(webViewIntent)
+                                // Start WebViewActivity for result - DetailActivity will receive the result
+                                // and then finish, allowing MainActivity's onActivityResult to eventually handle it
+                                startActivityForResult(webViewIntent, MainActivity.WEBVIEW_REQUEST_CODE)
+                                finish() // Close DetailActivity and return to MainActivity
                             } else {
                                 Toast.makeText(this, "未找到有效链接", Toast.LENGTH_SHORT).show()
                             }
@@ -298,7 +315,7 @@ private fun DetailScreen(
 
                         val menuItems = listOf(
                             stringResource(R.string.copy_link),
-                            stringResource(R.string.web_crawl_action)
+//                            stringResource(R.string.web_crawl_action)
                         )
 
                         val showMenu = remember { mutableStateOf(false) }

@@ -89,25 +89,32 @@ class WebViewActivity : ComponentActivity() {
 
         val initialUrl = intent?.getStringExtra("url")
         val taskId = intent?.getLongExtra("task_id", -1L) ?: -1L
-        
+
         setContent {
             val controller = ThemeController(ColorSchemeMode.System)
+            val localInitialUrl = initialUrl // Capture the variable in the composition scope
+            val taskCreatedId = remember { mutableStateOf<Long?>(null) }
+            val activity = this@WebViewActivity
             MiuixTheme(controller = controller) {
                 WebViewScreen(
-                    initialUrl = initialUrl,
+                    initialUrl = localInitialUrl,
                     onBack = { finish() },
-                    onResult = { urls, content ->
+                    onResult = { urls, content, taskId ->
                         val resultIntent = Intent().apply {
                             putStringArrayListExtra("image_urls", ArrayList(urls))
                             if (content.isNotEmpty()) {
                                 putExtra("content_text", content)
                             }
-                            if (taskId > 0) {
-                                putExtra("task_id", taskId)
+                            // Pass the URL that was crawled
+                            putExtra("url", localInitialUrl ?: "")
+                            // Pass the task ID if it was created
+                            taskId?.let { id ->
+                                putExtra("task_id", id)
                             }
                         }
-                        setResult(Activity.RESULT_OK, resultIntent)
-                        finish()
+                        // Make sure setResult is called before finish
+                        activity?.setResult(RESULT_OK, resultIntent)
+                        activity?.finish()
                     }
                 )
             }
@@ -120,7 +127,7 @@ class WebViewActivity : ComponentActivity() {
 private fun WebViewScreen(
     initialUrl: String?,
     onBack: () -> Unit,
-    onResult: (List<String>, String) -> Unit
+    onResult: (List<String>, String, Long?) -> Unit
 ) {
     val context = LocalContext.current
     var urlText by remember { mutableStateOf(TextFieldValue(initialUrl ?: "")) }
@@ -372,7 +379,7 @@ private fun extractImages(
     context: android.content.Context,
     webView: WebView,
     sniffedUrls: Set<String>,
-    onResult: (List<String>, String) -> Unit
+    onResult: (List<String>, String, Long?) -> Unit
 ) {
     webView.postDelayed({
         val jsCode = readAssetFile(context, "xhs_extractor.js") ?: run {
@@ -414,7 +421,21 @@ private fun extractImages(
                 allUrls.addAll(sniffedUrls)
 
                 if (allUrls.isNotEmpty()) {
-                    onResult(allUrls, contentText)
+                    // Create a task for the web crawl
+                    val taskId = com.neoruaa.xhsdn.data.TaskManager.createTask(
+                        noteUrl = webView.url ?: "",
+                        noteTitle = webView.title ?: "",
+                        noteType = com.neoruaa.xhsdn.data.NoteType.UNKNOWN,
+                        totalFiles = allUrls.size,
+                        noteContent = contentText // Include the content that was copied to clipboard
+                    )
+
+                    // Update the task status to DOWNLOADING immediately
+                    com.neoruaa.xhsdn.data.TaskManager.updateTaskStatus(taskId, com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING)
+
+                    // Debug: Show that URLs were found and task was created
+//                    Toast.makeText(context, "找到${allUrls.size}个URL, 任务ID: $taskId", Toast.LENGTH_SHORT).show()
+                    onResult(allUrls, contentText, taskId)
                 } else {
                     Toast.makeText(context, context.getString(R.string.no_accessible_urls_found), Toast.LENGTH_SHORT).show()
                 }
