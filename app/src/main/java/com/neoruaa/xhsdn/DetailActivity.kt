@@ -1,11 +1,14 @@
 package com.neoruaa.xhsdn
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -22,12 +25,11 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
@@ -45,27 +47,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import com.neoruaa.xhsdn.viewmodels.DetailViewModel
 import com.kyant.capsule.ContinuousRoundedRectangle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
@@ -81,21 +76,25 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import java.io.File
-import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.ui.platform.LocalDensity
-import com.neoruaa.xhsdn.MediaItem
-import com.neoruaa.xhsdn.MediaType
+import com.neoruaa.xhsdn.viewmodels.MediaItem
+import com.neoruaa.xhsdn.viewmodels.MediaType
 import com.neoruaa.xhsdn.utils.detectMediaType
 import com.neoruaa.xhsdn.utils.decodeSampledBitmap
-import com.neoruaa.xhsdn.utils.calculateInSampleSize
 import com.neoruaa.xhsdn.utils.createVideoThumbnail
 import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.SuperListPopup
 import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.icon.extended.Play
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.res.stringResource
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 
 data class DetailUiState(
     val mediaItems: List<MediaItem> = emptyList(),
@@ -111,6 +110,12 @@ class DetailViewModel : ViewModel() {
     fun updateState(newState: DetailUiState) {
         _state.value = newState
     }
+
+    fun removeMediaItem(itemToRemove: MediaItem) {
+        val currentState = _state.value
+        val updatedItems = currentState.mediaItems.filterNot { it.path == itemToRemove.path }
+        _state.value = currentState.copy(mediaItems = updatedItems)
+    }
 }
 
 class DetailActivity : ComponentActivity() {
@@ -119,18 +124,20 @@ class DetailActivity : ComponentActivity() {
         private const val EXTRA_TASK_TITLE = "task_title"
         private const val EXTRA_FILE_PATHS = "file_paths"
         private const val EXTRA_NOTE_CONTENT = "note_content"
+        private const val EXTRA_NOTE_URL = "note_url"
 
-        fun newIntent(context: Context, taskId: String, taskTitle: String, filePaths: List<String>, noteContent: String? = null): Intent {
+        fun newIntent(context: Context, taskId: String, taskTitle: String, filePaths: List<String>, noteContent: String? = null, noteUrl: String? = null): Intent {
             return Intent(context, DetailActivity::class.java).apply {
                 putExtra(EXTRA_TASK_ID, taskId)
                 putExtra(EXTRA_TASK_TITLE, taskTitle)
                 putStringArrayListExtra(EXTRA_FILE_PATHS, ArrayList(filePaths))
                 putExtra(EXTRA_NOTE_CONTENT, noteContent)
+                putExtra(EXTRA_NOTE_URL, noteUrl)
             }
         }
 
-        fun newIntent(context: Context, taskId: Long, taskTitle: String, filePaths: List<String>, noteContent: String? = null): Intent {
-            return newIntent(context, taskId.toString(), taskTitle, filePaths, noteContent)
+        fun newIntent(context: Context, taskId: Long, taskTitle: String, filePaths: List<String>, noteContent: String? = null, noteUrl: String? = null): Intent {
+            return newIntent(context, taskId.toString(), taskTitle, filePaths, noteContent, noteUrl)
         }
     }
 
@@ -167,6 +174,7 @@ class DetailActivity : ComponentActivity() {
         val taskTitle = intent.getStringExtra(EXTRA_TASK_TITLE) ?: "详情"
         val filePaths = intent.getStringArrayListExtra(EXTRA_FILE_PATHS) ?: arrayListOf()
         val noteContent = intent.getStringExtra(EXTRA_NOTE_CONTENT)
+        val noteUrl = intent.getStringExtra(EXTRA_NOTE_URL) // Get the note URL
 
         // 构建媒体项列表
         val mediaItems = filePaths.map { path ->
@@ -208,6 +216,29 @@ class DetailActivity : ComponentActivity() {
                         // 从UI状态中移除该项目
                         viewModel.removeMediaItem(mediaItem)
                     },
+                    onCopyUrl = {
+                        // Copy URL to clipboard directly in DetailActivity
+                        if (!noteUrl.isNullOrEmpty()) {
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("xhs_url", noteUrl))
+                            Toast.makeText(this, "已复制链接", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    onWebCrawl = {
+                        // Open web crawl directly from DetailActivity
+                        if (!noteUrl.isNullOrEmpty()) {
+                            // Use the same URL extraction as in MainActivity
+                            val cleanUrl = com.neoruaa.xhsdn.utils.UrlUtils.extractFirstUrl(noteUrl)
+                            if (cleanUrl != null) {
+                                val webViewIntent = Intent(this, WebViewActivity::class.java).apply {
+                                    putExtra("url", cleanUrl)
+                                }
+                                startActivity(webViewIntent)
+                            } else {
+                                Toast.makeText(this, "未找到有效链接", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
                     topBarState = topBarState
                 )
             }
@@ -229,9 +260,14 @@ private fun DetailScreen(
     onBack: () -> Unit,
     onMediaClick: (MediaItem) -> Unit,
     onDeleteMedia: (MediaItem) -> Unit,
+    onCopyUrl: () -> Unit,
+    onWebCrawl: () -> Unit,
     topBarState: TopAppBarState
 ) {
     val scrollBehavior = MiuixScrollBehavior(state = topBarState)
+
+    // Actions menu state
+    var menuExpanded by remember { mutableStateOf(false) }
 
     Scaffold(
         contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.displayCutout),
@@ -246,6 +282,55 @@ private fun DetailScreen(
                             .padding(start = 26.dp)
                             .clickable { onBack() }
                     )
+                },
+                actions = {
+                    Box(
+                        modifier = Modifier
+                                .padding(end = 26.dp)
+                                .clickable { menuExpanded = true },
+                            contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.MoreCircle,
+                            contentDescription = stringResource(R.string.more_options),
+                            modifier = Modifier.size(24.dp)
+                        )
+
+                        val menuItems = listOf(
+                            stringResource(R.string.copy_link),
+                            stringResource(R.string.web_crawl_action)
+                        )
+
+                        val showMenu = remember { mutableStateOf(false) }
+                        LaunchedEffect(menuExpanded) {
+                            showMenu.value = menuExpanded
+                        }
+
+                        SuperListPopup(
+                            show = showMenu,
+                            alignment = PopupPositionProvider.Align.TopEnd,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            ListPopupColumn {
+                                menuItems.forEachIndexed { index, item ->
+                                    DropdownImpl(
+                                        text = item,
+                                        optionSize = menuItems.size,
+                                        isSelected = false,
+                                        onSelectedIndexChange = {
+                                            menuExpanded = false
+                                            if (index == 0) {
+                                                onCopyUrl()
+                                            } else if (index == 1) {
+                                                onWebCrawl()
+                                            }
+                                        },
+                                        index = index
+                                    )
+                                }
+                            }
+                        }
+                    }
                 },
                 scrollBehavior = scrollBehavior
             )

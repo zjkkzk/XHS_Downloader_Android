@@ -1,4 +1,4 @@
-package com.neoruaa.xhsdn
+package com.neoruaa.xhsdn.viewmodels
 
 import android.app.Application
 import android.content.ClipData
@@ -15,12 +15,14 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.cancel
 import com.neoruaa.xhsdn.data.TaskManager
 import com.neoruaa.xhsdn.data.TaskStatus
 import com.neoruaa.xhsdn.data.NoteType
 import kotlinx.coroutines.CancellationException
 import android.util.Log
+import com.neoruaa.xhsdn.DownloadCallback
+import com.neoruaa.xhsdn.XHSDownloader
+import com.neoruaa.xhsdn.data.DownloadTask
 
 
 data class MediaItem(val path: String, val type: MediaType)
@@ -50,7 +52,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val displayedFiles = mutableSetOf<String>()
     private var currentUrl: String? = null
     private var hasUserContinuedAfterVideoWarning = false
-    private var downloadJob: kotlinx.coroutines.Job? = null
+    private var downloadJob: Job? = null
 
     // Track individual file progress for more accurate overall progress
     private val fileProgressMap = mutableMapOf<String, Float>() // Maps file path to progress (0.0 to 1.0)
@@ -64,7 +66,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var currentDownloadedBytes: Long = 0
     private var lastSpeedCalculationTime: Long = 0
     private var lastCalculatedSpeed = "0kb/s"
-    
+
     // Task tracking for history
     var currentTaskId: Long = 0
         private set
@@ -233,10 +235,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 addMedia(filePath)
                                 downloadedCount++
                                 taskCompletedFiles++
-                                currentFileProgress = 0f 
+                                currentFileProgress = 0f
                                 updateProgress()
                                 // Update task progress using local ID
-                                TaskManager.updateProgress(myTaskId, taskCompletedFiles, taskFailedFiles)
+                                TaskManager.updateProgress(
+                                    myTaskId,
+                                    taskCompletedFiles,
+                                    taskFailedFiles
+                                )
                                 TaskManager.addFilePath(myTaskId, filePath)
                             }
                         }
@@ -293,7 +299,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         updateProgress()
 
                         // Always update UI state with current progress and speed
-                        val progressText = "${String.format("%.1f", progressPercent)}%｜$lastCalculatedSpeed"
+                        val progressText =
+                            "${String.format("%.1f", progressPercent)}%｜$lastCalculatedSpeed"
                         _uiState.update { currentState ->
                             currentState.copy(downloadProgressText = progressText)
                         }
@@ -320,12 +327,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             _uiState.update { it.copy(showVideoWarning = true) }
 
                             // Update DB status to WAITING_FOR_USER so UI can show choice buttons
-                            TaskManager.updateTaskStatus(myTaskId, TaskStatus.WAITING_FOR_USER, "检测到视频，请选择下载方式")
+                            TaskManager.updateTaskStatus(
+                                myTaskId,
+                                TaskStatus.WAITING_FOR_USER,
+                                "检测到视频，请选择下载方式"
+                            )
 
                             // Cancel the download job to stop the download immediately
                             // We use a specific flag to know this was an intentional stop for user input
                             downloadJob?.cancel(CancellationException("WAITING_FOR_USER"))
-                            
+
                             appendStatus("下载因检测到视频而停止")
 
                             // Update isDownloading to false when download is stopped
@@ -351,13 +362,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val currentJob = coroutineContext[Job]
             try {
                 val success = runDownloadWithCancellationCheck(downloader, targetUrl, currentJob)
-                
+
                 withContext(Dispatchers.Main) {
                     // Only proceed if this coroutine is still active (not cancelled)
                     if (isActive) {
                         appendStatus("✅ 下载完成")
                         _uiState.update { it.copy(isDownloading = false) }
-                        
+
                          if (!success) {
                         // If failed, but it was due to waiting for user code, do NOT mark as failed
                         // Check if current task status is WAITING_FOR_USER (race condition check)
@@ -365,7 +376,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                          // Only mark failed if we are NOT waiting for user.
                          // But here success=false means downloader returned false.
                          // If cancelled, we go to catch block.
-                         
+
                          // If downloader simply returned false (rare if cancelled?), complete as failed.
                          TaskManager.completeTask(myTaskId, false, "下载过程出错")
                          appendStatus("下载失败")
@@ -409,15 +420,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * 重试失败的任务（复用已有 taskId）
      */
-    fun retryTask(task: com.neoruaa.xhsdn.data.DownloadTask, onError: (String) -> Unit) {
+    fun retryTask(task: DownloadTask, onError: (String) -> Unit) {
         // 重置任务状态
         TaskManager.resetTask(task.id)
         currentTaskId = task.id
-        
+
         val targetUrl = task.noteUrl
         currentUrl = targetUrl
         updateUrl(targetUrl)
-        
+
         // Reset tracking
         downloadedCount = 0
         totalMediaCount = 0
@@ -425,7 +436,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         taskFailedFiles = 0
         displayedFiles.clear()
         resetDownloadTracking()
-        
+
         _uiState.update {
             it.copy(
                 isDownloading = true,
@@ -436,14 +447,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mediaItems = emptyList()
             )
         }
-        
+
         downloadJob = viewModelScope.launch(Dispatchers.IO) {
             totalMediaCount = runCatching { XHSDownloader(getApplication()).getMediaCount(targetUrl) }
                 .getOrElse { 0 }
             updateProgress()
-            
+
             val myTaskId = task.id
-            
+
             val downloader = XHSDownloader(
                 getApplication(),
                 object : DownloadCallback {
@@ -453,9 +464,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 addMedia(filePath)
                                 downloadedCount++
                                 taskCompletedFiles++
-                                currentFileProgress = 0f 
+                                currentFileProgress = 0f
                                 updateProgress()
-                                TaskManager.updateProgress(myTaskId, taskCompletedFiles, taskFailedFiles)
+                                TaskManager.updateProgress(
+                                    myTaskId,
+                                    taskCompletedFiles,
+                                    taskFailedFiles
+                                )
                                 TaskManager.addFilePath(myTaskId, filePath)
                             }
                         }
@@ -469,9 +484,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         val progressPercent = if (total > 0) {
                             (downloaded.toDouble() / total.toDouble() * 100).toFloat()
                         } else 0f
-                        currentFileProgress = if (total > 0) downloaded.toFloat() / total.toFloat() else 0f
+                        currentFileProgress =
+                            if (total > 0) downloaded.toFloat() / total.toFloat() else 0f
                         updateProgress()
-                        val progressText = "${String.format("%.1f", progressPercent)}%｜$lastCalculatedSpeed"
+                        val progressText =
+                            "${String.format("%.1f", progressPercent)}%｜$lastCalculatedSpeed"
                         _uiState.update { currentState ->
                             currentState.copy(downloadProgressText = progressText)
                         }
@@ -501,7 +518,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         TaskManager.completeTask(myTaskId, false, "下载过程出错")
                     }
                 }
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 withContext(Dispatchers.Main) {
                     if (taskCompletedFiles == 0) {
                         TaskManager.completeTask(myTaskId, false, "下载已取消")
@@ -571,13 +588,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         // 1. Separate videos and images
         // Helper to check if URL is a video
         fun isVideo(url: String): Boolean {
-            return url.contains(".mp4") || 
-                   url.contains("sns-video") || 
+            return url.contains(".mp4") ||
+                   url.contains("sns-video") ||
                    url.contains("blob:")
         }
 
         val (videoUrls, imageUrls) = urls.partition { isVideo(it) }
-        
+
         // 2. Deduplicate videos (Prioritize HD from sns-video-bd.xhscdn.com)
         // Since xhs_extractor.js pushes the main video (originVideoKey) first,
         // we can safely prioritize the first video that matches our quality criteria.
@@ -586,10 +603,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (hdVideos.isNotEmpty()) {
                 // Determine valid HD videos
                 val distinctHd = hdVideos.distinct()
-                
+
                 // User requirement: Keep only the highest quality one.
                 // Assuming the first one (from originVideoKey) is the best.
-                listOf(distinctHd.first()) 
+                listOf(distinctHd.first())
             } else {
                 // No HD videos found, keep the first available video to avoid duplicates
                 listOf(videoUrls.distinct().first())
@@ -600,7 +617,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // 3. Combine and deduplicate everything
         val finalUrls = (imageUrls + finalVideoUrls).distinct()
-        
+
         if (finalUrls.isEmpty()) {
              appendStatus("过滤后未发现有效资源")
              return
@@ -632,7 +649,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             if (displayedFiles.add(filePath)) {
                                 addMedia(filePath)
                                 downloadedCount++
-                                currentFileProgress = 0f // Reset current file progress when file is completed
+                                currentFileProgress =
+                                    0f // Reset current file progress when file is completed
                                 updateProgress()
                                 // If we have a taskId, add the file path to that task
                                 taskId?.let { id ->
@@ -693,7 +711,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         updateProgress()
 
                         // Always update UI state with current progress and speed
-                        val progressText = "${String.format("%.1f", progressPercent)}%｜$lastCalculatedSpeed"
+                        val progressText =
+                            "${String.format("%.1f", progressPercent)}%｜$lastCalculatedSpeed"
                         _uiState.update { currentState ->
                             currentState.copy(downloadProgressText = progressText)
                         }
@@ -778,7 +797,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun continueTask(task: com.neoruaa.xhsdn.data.DownloadTask) {
+    fun continueTask(task: DownloadTask) {
         updateUrl(task.noteUrl)
         continueAfterVideoWarning()
     }

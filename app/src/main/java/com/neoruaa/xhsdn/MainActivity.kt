@@ -96,6 +96,10 @@ import java.io.File
 import android.util.LruCache
 import androidx.compose.foundation.layout.statusBars
 import com.kyant.capsule.ContinuousRoundedRectangle
+import com.neoruaa.xhsdn.viewmodels.MainUiState
+import com.neoruaa.xhsdn.viewmodels.MainViewModel
+import com.neoruaa.xhsdn.viewmodels.MediaItem
+import com.neoruaa.xhsdn.viewmodels.MediaType
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
@@ -108,7 +112,6 @@ private val thumbnailCache = object : LruCache<String, ImageBitmap>(50) {}
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
-
 
     private val _autoDownloadIntentUrl = mutableStateOf<String?>(null)
 
@@ -793,14 +796,15 @@ private fun HistoryPage(
                                 onDelete = { taskToDelete = task },
                                 onMediaClick = onMediaClick,
                                 onClick = {
-                                    val intent = DetailActivity.newIntent(
+                                    val detailIntent = DetailActivity.newIntent(
                                         context,
                                         task.id.toString(),
                                         task.noteTitle ?: task.noteUrl,
                                         task.filePaths,
-                                        task.noteContent
+                                        task.noteContent,
+                                        task.noteUrl  // Pass the note URL
                                     )
-                                    context.startActivity(intent)
+                                    context.startActivity(detailIntent)
                                 }
                             )
                         }
@@ -944,7 +948,6 @@ private fun TaskCell(
         com.neoruaa.xhsdn.data.TaskStatus.QUEUED -> "排队中"
         com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING -> "下载中"
         com.neoruaa.xhsdn.data.TaskStatus.COMPLETED -> "已完成"
-        com.neoruaa.xhsdn.data.TaskStatus.COMPLETED -> "已完成"
         com.neoruaa.xhsdn.data.TaskStatus.FAILED -> "下载失败"
         com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER -> "等待选择"
     }
@@ -958,7 +961,7 @@ private fun TaskCell(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(ContinuousRoundedRectangle(28.dp))
+            .clip(ContinuousRoundedRectangle(18.dp))
             .combinedClickable(
                 onClick = { onClick?.invoke() },
                 onLongClick = onDelete
@@ -1096,7 +1099,6 @@ private fun TaskCell(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(12.dp))
             }
         }
 
@@ -1109,6 +1111,7 @@ private fun TaskCell(
                                 task.status == com.neoruaa.xhsdn.data.TaskStatus.QUEUED
 
             if (isDownloading) {
+                 Spacer(modifier = Modifier.height(12.dp))
                  Button(
                      onClick = onStop,
                      modifier = Modifier.weight(1f),
@@ -1120,6 +1123,7 @@ private fun TaskCell(
 
                 // 等待用户选择状态 (显示 坚持下载/网页爬取)
                 if (task.status == com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER) {
+                    Spacer(modifier = Modifier.height(12.dp))
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // 提示语
                         Text(
@@ -1153,22 +1157,23 @@ private fun TaskCell(
                         }
                     }
                 } else {
-                    // 复制链接按钮
-                    TextButton(
-                        text = "复制链接",
-                        onClick = onCopyUrl,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    // 爬取按钮（通过网页爬取功能打开）
-                    TextButton(
-                        text = "网页爬取",
-                        onClick = onWebCrawl,
-                        modifier = Modifier.weight(1f)
-                    )
+//                    // 复制链接按钮
+//                    TextButton(
+//                        text = "复制链接",
+//                        onClick = onCopyUrl,
+//                        modifier = Modifier.weight(1f)
+//                    )
+//
+//                    // 爬取按钮（通过网页爬取功能打开）
+//                    TextButton(
+//                        text = "网页爬取",
+//                        onClick = onWebCrawl,
+//                        modifier = Modifier.weight(1f)
+//                    )
 
                     // 重试按钮（仅失败任务显示）
                     if (task.status == com.neoruaa.xhsdn.data.TaskStatus.FAILED) {
+                        Spacer(modifier = Modifier.height(12.dp))
                         Button(
                             onClick = onRetry,
                             modifier = Modifier.weight(1f),

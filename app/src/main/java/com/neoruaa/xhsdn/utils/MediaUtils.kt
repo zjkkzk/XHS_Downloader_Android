@@ -3,7 +3,7 @@ package com.neoruaa.xhsdn.utils
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
-import com.neoruaa.xhsdn.MediaType
+import com.neoruaa.xhsdn.viewmodels.MediaType
 import java.io.File
 
 fun decodeSampledBitmap(filePath: String, reqWidth: Int, reqHeight: Int): Bitmap? {

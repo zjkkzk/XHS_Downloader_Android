@@ -100,4 +100,7 @@
     <!-- Additional strings for i18n -->
     <string name="back">Back</string>
     <string name="version_with_prefix">v%s</string>
+    <string name="more_options">More options</string>
+    <string name="copy_link">Copy Link</string>
+    <string name="web_crawl_action">Web Crawl</string>
 </resources>

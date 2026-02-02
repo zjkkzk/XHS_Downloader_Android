@@ -527,7 +527,7 @@ private fun TokenGrid(
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.padding(top = 0.dp, start = 16.dp, end = 16.dp, bottom = 16.dp)
+        modifier = Modifier.padding(top = 0.dp, start = 16.dp, end = 12.dp, bottom = 16.dp)
     ) {
         tokens.forEach { token ->
             TokenChip(
