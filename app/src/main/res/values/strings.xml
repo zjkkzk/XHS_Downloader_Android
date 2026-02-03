@@ -3,7 +3,7 @@
     <string name="app_name">XHS Downloader</string>
     <string name="enter_xhs_url">Enter XHS post share URL</string>
     <string name="download_button">Download Media</string>
-    <string name="ready_to_download">Ready to download</string>
+    <string name="ready_to_download">Press the button below to download</string>
     <string name="please_enter_url">Please enter a URL</string>
     <string name="grant_all_files_access">Please grant \'All files access\' permission for better functionality</string>
     <string name="storage_permission_granted">Storage permission granted</string>
@@ -182,4 +182,5 @@
     <string name="clear_history">Clear History</string>
     <string name="download_detail_title">Download Details</string>
     <string name="downloading_files">Downloading...</string>
+    <string name="clipboard_xhs_link_detected">XHS Link Detected</string>
 </resources>

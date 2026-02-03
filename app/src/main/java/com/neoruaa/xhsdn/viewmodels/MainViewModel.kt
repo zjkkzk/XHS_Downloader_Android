@@ -77,7 +77,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Throttling for task progress updates to reduce database writes
     private var lastTaskProgressUpdateTime = 0L
-    private val TASK_PROGRESS_UPDATE_INTERVAL = 200L // 200ms interval between updates
+    private val TASK_PROGRESS_UPDATE_INTERVAL = 100L // 100ms interval between updates
 
     fun cancelCurrentDownload() {
         if (downloadJob?.isActive == true) {

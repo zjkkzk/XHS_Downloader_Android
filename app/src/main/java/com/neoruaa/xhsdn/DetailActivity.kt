@@ -186,30 +186,7 @@ class DetailActivity : ComponentActivity() {
                 DetailScreen(
                     uiState = uiState,
                     onBack = { finish() },
-                    onMediaClick = { mediaItem ->
-                        // 处理媒体项点击事件
-                        try {
-                            val file = File(mediaItem.path)
-                            val uri = FileProvider.getUriForFile(
-                                this@DetailActivity,
-                                "${packageName}.fileprovider",
-                                file
-                            )
-
-                            val intent = Intent().apply {
-                                action = Intent.ACTION_VIEW
-                                setDataAndType(uri, getMimeType(mediaItem.type))
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            }
-
-                            // 授予临时权限给目标应用
-                            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            startActivity(intent)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            Toast.makeText(this@DetailActivity, getString(R.string.unable_to_open_file, e.message), Toast.LENGTH_SHORT).show()
-                        }
-                    },
+                    onMediaClick = { openFile(it) },
                     onDeleteMedia = { mediaItem ->
                         // 从UI状态中移除该项目
                         viewModel.removeMediaItem(mediaItem)
@@ -247,13 +224,31 @@ class DetailActivity : ComponentActivity() {
         }
     }
 
-    private fun getMimeType(mediaType: MediaType): String {
-        return when (mediaType) {
-            MediaType.IMAGE -> "image/*"
+    private fun openFile(item: MediaItem) {
+        val file = File(item.path)
+        if (!file.exists()) {
+            showToast(getString(R.string.file_does_not_exist, item.path))
+            return
+        }
+        val mimeType = when (item.type) {
             MediaType.VIDEO -> "video/*"
+            MediaType.IMAGE -> "image/*"
             MediaType.OTHER -> "*/*"
         }
+        val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        kotlin.runCatching { startActivity(intent) }.onFailure {
+            showToast(getString(R.string.unable_to_open_file_error, it.message))
+        }
     }
+
+    private fun showToast(message: String) {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
 }
 
 @Composable
@@ -399,7 +394,7 @@ private fun FilesPage(
                     ) {
                         SelectionContainer {
                             Text(
-                                text = uiState.noteContent,
+                                text = uiState.noteContent.replace("[话题]", ""),
                                 fontSize = MiuixTheme.textStyles.headline1.fontSize,
                                 fontWeight = FontWeight.Medium,
                                 color = MiuixTheme.colorScheme.onBackground

@@ -3,7 +3,7 @@
     <string name="app_name">小红书下载器</string>
     <string name="enter_xhs_url">输入小红书帖子分享链接</string>
     <string name="download_button">下载媒体</string>
-    <string name="ready_to_download">准备下载</string>
+    <string name="ready_to_download">点击底部按钮开始下载</string>
     <string name="please_enter_url">请输入链接</string>
     <string name="grant_all_files_access">请授予\"所有文件访问权限\"以获得更好的功能体验</string>
     <string name="storage_permission_granted">存储权限已授予</string>
@@ -139,7 +139,7 @@
     <string name="delete_file_dialog_message">是否删除 \"%1$s\" 媒体文件？</string>
     <string name="notes_content_title">笔记文案</string>
     <string name="downloaded_files_title_lower">已下载文件</string>
-    <string name="no_downloaded_files">暂无已下载文件</string>
+    <string name="no_downloaded_files">暂无已下载项目</string>
     <string name="play_content_description">播放</string>
     <string name="delete_content_description">删除</string>
     <string name="back_content_description">返回</string>
@@ -177,9 +177,10 @@
     <string name="clear_history_dialog_message">确定要删除全部下载记录吗？已下载的文件不会被删除。</string>
     <string name="delete_task_dialog_title">删除任务</string>
     <string name="delete_task_dialog_message">确定要删除这条下载记录吗？已下载的文件不会被删除。</string>
-    <string name="copy_description">复制文案</string>
-    <string name="web_crawl_option">网页爬取</string>
+    <string name="copy_description">提取文案</string>
+    <string name="web_crawl_option">从网页爬取</string>
     <string name="clear_history">清除历史记录</string>
     <string name="download_detail_title">下载详情</string>
     <string name="downloading_files">正在下载...</string>
+    <string name="clipboard_xhs_link_detected">检测到小红书链接</string>
 </resources>

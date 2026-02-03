@@ -117,6 +117,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.awaitCancellation
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.icon.extended.File
+import top.yukonga.miuix.kmp.icon.extended.Link
+import top.yukonga.miuix.kmp.icon.extended.Update
 
 // 缩略图内存缓存（最多缓存 50 张缩略图）
 private val thumbnailCache = object : LruCache<String, ImageBitmap>(50) {}
@@ -958,14 +961,23 @@ private fun HistoryPage(
                             .padding(32.dp),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
+                        Icon(
+                            imageVector = MiuixIcons.Info,
+                            contentDescription = stringResource(R.string.no_downloaded_files),
+                            modifier = Modifier.size(48.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = stringResource(R.string.no_downloaded_files),
+                            fontWeight = FontWeight.Medium,
+                            fontSize = MiuixTheme.textStyles.headline1.fontSize,
                             color = Color.Gray
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = stringResource(R.string.ready_to_download),
-                            fontSize = 12.sp,
+                            fontSize = MiuixTheme.textStyles.body2.fontSize,
                             color = Color.Gray
                         )
                     }
@@ -1044,21 +1056,32 @@ private fun HistoryPage(
                 },
             cornerRadius = 18.dp,
             colors = CardDefaults.defaultColors(
-                color = if (uiState.isDownloading) MiuixTheme.colorScheme.primaryVariant else MiuixTheme.colorScheme.primary
+                color = if (uiState.isDownloading) MiuixTheme.colorScheme.disabledPrimaryButton else MiuixTheme.colorScheme.primary
             )
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 14.dp, horizontal = 16.dp),
+                    .padding(all = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text(
-                    text = if (uiState.isDownloading) stringResource(R.string.downloading_files) else if (manualInputLinks) stringResource(R.string.manual_input_links) else stringResource(R.string.start_download_from_clipboard),
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Row(
+//                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (manualInputLinks) MiuixIcons.Link else MiuixIcons.File,
+                        contentDescription = stringResource(R.string.github_link),
+                        modifier = Modifier.padding(end = 8.dp),
+                        tint = Color.White
+                    )
+                    Text(
+                        text = if (uiState.isDownloading) stringResource(R.string.downloading_files) else if (manualInputLinks) stringResource(R.string.manual_input_links) else stringResource(R.string.start_download_from_clipboard),
+                        color = Color.White,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+
                 if (uiState.isDownloading) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -1103,14 +1126,14 @@ private fun HistoryPage(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = stringResource(R.string.ready_to_download),
+                                text = stringResource(R.string.clipboard_xhs_link_detected),
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF4CAF50)
                             )
                             Text(
                                 text = detectedXhsLink,
                                 fontSize = 12.sp,
-                                color = Color.Gray,
+                                color = Color(0xB04CAF50),
                                 maxLines = 2,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                             )
@@ -1118,7 +1141,7 @@ private fun HistoryPage(
                         Text(
                             text = "×",
                             fontSize = 18.sp,
-                            color = Color.Gray
+                            color = Color(0xFF4CAF50)
                         )
                     }
                 }
