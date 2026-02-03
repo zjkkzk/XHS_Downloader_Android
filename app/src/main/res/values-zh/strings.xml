@@ -105,4 +105,80 @@
     <string name="more_options">更多选项</string>
     <string name="copy_link">复制分享链接</string>
     <string name="web_crawl_action">网页爬取</string>
+
+    <!-- Strings extracted from layouts -->
+    <string name="go_button">前往</string>
+    <string name="enter_url_hint">输入网址</string>
+
+    <!-- Toast messages -->
+    <string name="unable_to_open_file">无法打开文件: %1$s</string>
+    <string name="link_copied">链接已复制</string>
+    <string name="no_valid_link_found">未找到有效链接</string>
+    <string name="storage_permission_required">缺少存储权限，请打开 App 授予权限</string>
+    <string name="clipboard_no_xhs_link">剪贴板中未检测到小红书链接</string>
+    <string name="copied_description">已复制文案</string>
+    <string name="unable_to_open_browser">无法打开浏览器: %1$s</string>
+    <string name="invalid_link_please_reenter">未找到有效链接，请重新输入</string>
+    <string name="storage_permission_granted_continue">已获得存储权限，可继续下载</string>
+    <string name="storage_permission_missing_unable_save">缺少存储权限，无法保存文件</string>
+    <string name="file_does_not_exist">文件不存在：%1$s</string>
+    <string name="unable_to_open_file_error">无法打开文件：%1$s</string>
+    <string name="grant_all_files_access_retry">请授予所有文件访问权限后重试</string>
+    <string name="task_ignored_downloading">任务忽略，链接正在下载中，请勿重复复制</string>
+    <string name="task_ignored_recently_downloaded">任务忽略，该链接最近已下载过，请在历史页查看</string>
+    <string name="auto_download_unavailable">无法自动下载</string>
+    <string name="preparing_download">正在准备下载...</string>
+    <string name="downloading_files_count">正在下载... 共 %1$d 个文件</string>
+    <string name="download_completed_files_count">下载完成，成功下载 %1$d 个文件</string>
+    <string name="download_failed_no_files">下载失败，未能下载文件</string>
+    <string name="download_failed_check_network">下载失败，请检查网络或链接</string>
+    <string name="download_cancelled_by_user">下载已取消，用户操作</string>
+    <string name="download_error_message">下载出错：%1$s</string>
+    <string name="user_manually_stopped">用户手动停止</string>
+    <string name="delete_file_dialog_title">删除文件</string>
+    <string name="delete_file_dialog_message">是否删除 \"%1$s\" 媒体文件？</string>
+    <string name="notes_content_title">笔记文案</string>
+    <string name="downloaded_files_title_lower">已下载文件</string>
+    <string name="no_downloaded_files">暂无已下载文件</string>
+    <string name="play_content_description">播放</string>
+    <string name="delete_content_description">删除</string>
+    <string name="back_content_description">返回</string>
+    <string name="retry">重试</string>
+    <string name="task_info_format">%1$s · %2$d 个文件</string>
+    <string name="failed_files_format">· %1$d 失败</string>
+    <string name="files_completed_format">%1$d/%2$d</string>
+    <string name="official_limitation_tip">因官方限制，仅能下载低清版本。如需高清，选网页爬取。</string>
+    <string name="download_completed_notification_title">下载完成</string>
+    <string name="download_failed_notification_title">下载失败</string>
+    <string name="download_cancelled_notification_title">下载已取消</string>
+    <string name="download_error_notification_title">下载出错</string>
+    <string name="media_type_image">图片</string>
+    <string name="media_type_video">视频</string>
+    <string name="media_type_other">其他</string>
+    <string name="note_type_image">图文</string>
+    <string name="note_type_video">视频</string>
+    <string name="note_type_unknown">未知</string>
+    <string name="note_type_web_crawl">网页爬取</string>
+    <string name="task_status_queued">排队中</string>
+    <string name="task_status_downloading">下载中</string>
+    <string name="task_status_completed">已完成</string>
+    <string name="task_status_failed">下载失败</string>
+    <string name="task_status_waiting_for_user">等待选择</string>
+    <string name="progress_format">%1$d%%</string>
+    <string name="progress_speed_format">%1$s｜%2$s</string>
+
+    <!-- Additional UI texts -->
+    <string name="app_full_name">小红书下载器</string>
+    <string name="tab_all">全部</string>
+    <string name="tab_waiting_for_selection">等待选择(%1$d)</string>
+    <string name="tab_failed">失败(%1$d)</string>
+    <string name="start_download_from_clipboard">从剪切板开始下载</string>
+    <string name="clear_history_dialog_title">清除历史记录</string>
+    <string name="clear_history_dialog_message">确定要删除全部下载记录吗？已下载的文件不会被删除。</string>
+    <string name="delete_task_dialog_title">删除任务</string>
+    <string name="delete_task_dialog_message">确定要删除这条下载记录吗？已下载的文件不会被删除。</string>
+    <string name="copy_description">复制文案</string>
+    <string name="web_crawl_option">网页爬取</string>
+    <string name="clear_history">清除历史记录</string>
+    <string name="download_detail_title">下载详情</string>
 </resources>

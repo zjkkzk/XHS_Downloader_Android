@@ -172,7 +172,7 @@ class DetailActivity : ComponentActivity() {
         viewModel.updateState(
             DetailUiState(
                 mediaItems = mediaItems,
-                taskTitle = "下载详情",
+                taskTitle = getString(R.string.download_detail_title), // Use context to get string resource
                 isDownloading = false,
                 noteContent = noteContent
             )
@@ -195,19 +195,19 @@ class DetailActivity : ComponentActivity() {
                                 "${packageName}.fileprovider",
                                 file
                             )
-                            
+
                             val intent = Intent().apply {
                                 action = Intent.ACTION_VIEW
                                 setDataAndType(uri, getMimeType(mediaItem.type))
                                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
                             }
-                            
+
                             // 授予临时权限给目标应用
                             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             startActivity(intent)
                         } catch (e: Exception) {
                             e.printStackTrace()
-                            Toast.makeText(this@DetailActivity, "无法打开文件: ${e.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this@DetailActivity, getString(R.string.unable_to_open_file, e.message), Toast.LENGTH_SHORT).show()
                         }
                     },
                     onDeleteMedia = { mediaItem ->
@@ -219,7 +219,7 @@ class DetailActivity : ComponentActivity() {
                         if (!noteUrl.isNullOrEmpty()) {
                             val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("xhs_url", noteUrl))
-                            Toast.makeText(this, "已复制链接", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, R.string.link_copied, Toast.LENGTH_SHORT).show()
                         }
                     },
                     onWebCrawl = {
@@ -237,7 +237,7 @@ class DetailActivity : ComponentActivity() {
                                 startActivityForResult(webViewIntent, MainActivity.WEBVIEW_REQUEST_CODE)
                                 finish() // Close DetailActivity and return to MainActivity
                             } else {
-                                Toast.makeText(this, "未找到有效链接", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(this, R.string.no_valid_link_found, Toast.LENGTH_SHORT).show()
                             }
                         }
                     },
@@ -279,7 +279,7 @@ private fun DetailScreen(
                 navigationIcon = {
                     Icon(
                         imageVector = MiuixIcons.Back,
-                        contentDescription = "返回",
+                        contentDescription = stringResource(R.string.back_content_description),
                         modifier = Modifier
                             .padding(start = 26.dp)
                             .clickable { onBack() }
@@ -379,7 +379,7 @@ private fun FilesPage(
         if (uiState.noteContent != null) {
             item(span = StaggeredGridItemSpan.FullLine) {
                 SmallTitle(
-                    text = "笔记文案",
+                    text = stringResource(R.string.notes_content_title),
                     insideMargin = PaddingValues(12.dp, 0.dp)
                 )
             }
@@ -413,7 +413,7 @@ private fun FilesPage(
         // ===== 已下载文件标题（单列 / 满行）=====
         item(span = StaggeredGridItemSpan.FullLine) {
             SmallTitle(
-                text = "已下载文件",
+                text = stringResource(R.string.downloaded_files_title_lower),
                 insideMargin = PaddingValues(12.dp, 0.dp)
             )
         }
@@ -428,7 +428,7 @@ private fun FilesPage(
                         .background(MiuixTheme.colorScheme.surfaceVariant)
                 ) {
                     Text(
-                        text = "暂无已下载文件",
+                        text = stringResource(R.string.no_downloaded_files),
                         modifier = Modifier.padding(16.dp)
                     )
                 }
@@ -487,7 +487,7 @@ private fun MediaPreview(item: MediaItem, onClick: () -> Unit, onDelete: (MediaI
                 if (item.type == MediaType.VIDEO) {
                     Icon(
                         imageVector = MiuixIcons.Play,
-                        contentDescription = "播放",
+                        contentDescription = stringResource(R.string.play_content_description),
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -513,7 +513,7 @@ private fun MediaPreview(item: MediaItem, onClick: () -> Unit, onDelete: (MediaI
             }
             Icon(
                 imageVector = MiuixIcons.Delete,
-                contentDescription = "删除",
+                contentDescription = stringResource(R.string.delete_content_description),
                 modifier = Modifier
                     .size(20.dp)
                     .clickable { showDeleteDialog = true }
@@ -523,8 +523,8 @@ private fun MediaPreview(item: MediaItem, onClick: () -> Unit, onDelete: (MediaI
 
     if (showDeleteDialog) {
         SuperDialog(
-            title = "删除文件",
-            summary = "是否删除 \"$fileName\" 媒体文件？",
+            title = stringResource(R.string.delete_file_dialog_title),
+            summary = stringResource(R.string.delete_file_dialog_message, fileName),
             show = remember { mutableStateOf(true) },
             onDismissRequest = { showDeleteDialog = false }
         ) {
@@ -533,13 +533,13 @@ private fun MediaPreview(item: MediaItem, onClick: () -> Unit, onDelete: (MediaI
                 modifier = Modifier.padding(top = 8.dp)
             ) {
                 TextButton(
-                    text = "取消",
+                    text = stringResource(R.string.cancel),
                     onClick = { showDeleteDialog = false },
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(12.dp))
                 TextButton(
-                    text = "删除",
+                    text = stringResource(R.string.apply),
                     onClick = {
                         // 删除文件
                         val file = File(item.path)

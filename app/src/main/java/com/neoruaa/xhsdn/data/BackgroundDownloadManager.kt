@@ -49,7 +49,7 @@ object BackgroundDownloadManager {
         // Check for duplicates - atomically add to set
         if (!activeUrls.add(url)) {
             Log.d(TAG, "startDownload: Task already active, skipping duplicate. URL: $url")
-            NotificationHelper.showDiagnosticNotification(appContext, "任务忽略", "链接正在下载中，请勿重复复制")
+            NotificationHelper.showDiagnosticNotification(appContext, appContext.getString(R.string.task_ignored_downloading), appContext.getString(R.string.task_ignored_downloading))
             return
         }
         
@@ -57,7 +57,7 @@ object BackgroundDownloadManager {
         if (TaskManager.hasRecentTask(url)) {
             Log.d(TAG, "startDownload: Task matches recent task in DB, skipping. URL: $url")
             activeUrls.remove(url)
-            NotificationHelper.showDiagnosticNotification(appContext, "任务忽略", "该链接最近已下载过，请在历史页查看")
+            NotificationHelper.showDiagnosticNotification(appContext, appContext.getString(R.string.task_ignored_recently_downloaded), appContext.getString(R.string.task_ignored_recently_downloaded))
             return
         }
 
@@ -66,10 +66,10 @@ object BackgroundDownloadManager {
             Log.e(TAG, "startDownload: Missing storage permissions!")
             activeUrls.remove(url)
             NotificationHelper.showDownloadNotification(
-                appContext, 
-                url.hashCode(), 
-                "无法自动下载", 
-                "缺少存储权限，请打开 App 授予权限", 
+                appContext,
+                url.hashCode(),
+                appContext.getString(R.string.auto_download_unavailable),
+                appContext.getString(R.string.storage_permission_required),
                 false
             )
             return
@@ -79,7 +79,7 @@ object BackgroundDownloadManager {
             val prepId = url.hashCode()
             var taskId: Long = -1 // Initialize with invalid ID
             try {
-                NotificationHelper.showDownloadNotification(appContext, prepId, "正在准备下载...", url, true, showProgress = false)
+                NotificationHelper.showDownloadNotification(appContext, prepId, appContext.getString(R.string.preparing_download), url, true, showProgress = false)
 
                 // 1. Get info
                 // We run this inside runCatching because getMediaCount might throw or do network ops
@@ -97,7 +97,7 @@ object BackgroundDownloadManager {
                 
                 // 取消准备阶段的通知，替换为带 ID 的正式任务通知
                 NotificationHelper.cancelNotification(appContext, prepId)
-                NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), "正在下载...", "共 $mediaCount 个文件", true)
+                NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), appContext.getString(R.string.preparing_download), appContext.getString(R.string.downloading_files_count, mediaCount), true)
 
                 val completedFiles = java.util.concurrent.atomic.AtomicInteger(0)
                 val failedFiles = java.util.concurrent.atomic.AtomicInteger(0)
@@ -139,14 +139,14 @@ object BackgroundDownloadManager {
                     
                     if (completed > 0) {
                         TaskManager.completeTask(taskId, true)
-                        NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), "下载完成", "成功下载 $completed 个文件", false)
+                        NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), appContext.getString(R.string.download_completed_notification_title), appContext.getString(R.string.download_completed_files_count, completed), false)
                     } else {
-                        TaskManager.completeTask(taskId, false, "未下载任何文件")
-                        NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), "下载失败", "未能下载文件", false)
+                        TaskManager.completeTask(taskId, false, appContext.getString(R.string.download_failed_no_files))
+                        NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), appContext.getString(R.string.download_failed_notification_title), appContext.getString(R.string.download_failed_no_files), false)
                     }
                 } else {
-                    TaskManager.completeTask(taskId, false, "下载过程出错")
-                    NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), "下载失败", "请检查网络或链接", false)
+                    TaskManager.completeTask(taskId, false, appContext.getString(R.string.download_error_message, "下载过程出错"))
+                    NotificationHelper.showDownloadNotification(appContext, taskId.toInt(), appContext.getString(R.string.download_error_notification_title), appContext.getString(R.string.download_failed_check_network), false)
                 }
 
             } catch (e: Exception) {
@@ -154,16 +154,16 @@ object BackgroundDownloadManager {
                     Log.d(TAG, "Download cancelled for task $taskId")
                     // If task was created, mark it as failed due to cancellation
                     if (taskId != -1L) {
-                        TaskManager.completeTask(taskId, false, "下载已取消")
+                        TaskManager.completeTask(taskId, false, appContext.getString(R.string.download_cancelled_by_user))
                     }
-                    NotificationHelper.showDownloadNotification(appContext, if (taskId != -1L) taskId.toInt() else prepId, "下载已取消", "任务已被用户停止", false)
+                    NotificationHelper.showDownloadNotification(appContext, if (taskId != -1L) taskId.toInt() else prepId, appContext.getString(R.string.download_cancelled_notification_title), appContext.getString(R.string.user_manually_stopped), false)
                 } else {
                     Log.e(TAG, "Download error for task $taskId", e)
                     // If task was created, fail it
                     if (taskId != -1L) {
-                        TaskManager.completeTask(taskId, false, e.message ?: "未知错误")
+                        TaskManager.completeTask(taskId, false, e.message ?: appContext.getString(R.string.download_error_message, "未知错误"))
                     }
-                    NotificationHelper.showDownloadNotification(appContext, if (taskId != -1L) taskId.toInt() else prepId, "下载出错", e.message ?: "未知错误", false)
+                    NotificationHelper.showDownloadNotification(appContext, if (taskId != -1L) taskId.toInt() else prepId, appContext.getString(R.string.download_error_notification_title), e.message ?: appContext.getString(R.string.download_error_message, "未知错误"), false)
                 }
             } finally {
                // Remove job from activeJobs map regardless of success or failure

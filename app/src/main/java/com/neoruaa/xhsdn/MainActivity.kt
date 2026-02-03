@@ -329,7 +329,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                 } else {
-                                    showToast("剪贴板中未检测到小红书链接")
+                                    showToast(getString(R.string.clipboard_no_xhs_link))
                                 }
                             }
                         }
@@ -341,7 +341,7 @@ class MainActivity : ComponentActivity() {
                         if (clipText.isNotEmpty()) {
                             viewModel.updateUrl(clipText)
                         }
-                        ensureStoragePermission { viewModel.copyDescription({ showToast("已复制文案") }, { showToast(it) }) } 
+                        ensureStoragePermission { viewModel.copyDescription({ showToast(getString(R.string.copied_description)) }, { showToast(it) }) } 
                     },
                     onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
                     onWebCrawlFromClipboard = {
@@ -360,7 +360,7 @@ class MainActivity : ComponentActivity() {
 
                                 detectedXhsLink = null
                             } else {
-                                showToast("未找到有效链接，请重新输入")
+                                showToast(getString(R.string.invalid_link_please_reenter))
                             }
                         }
                     },
@@ -368,7 +368,7 @@ class MainActivity : ComponentActivity() {
                     onCopyUrl = { url ->
                         val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("xhs_url", url))
-                        showToast("已复制链接")
+                        showToast(getString(R.string.link_copied))
                     },
                     onBrowseUrl = { url ->
                         lifecycleScope.launch {
@@ -383,7 +383,7 @@ class MainActivity : ComponentActivity() {
                                         showToast("未找到有效链接")
                                     }
                                 } catch (e: Exception) {
-                                    showToast("无法打开浏览器: ${e.message}")
+                                    showToast(getString(R.string.unable_to_open_browser, e.message))
                                 }
                             }
                         }
@@ -440,7 +440,7 @@ class MainActivity : ComponentActivity() {
     private fun launchWebView(input: String, taskId: Long? = null) {
         val cleanUrl = UrlUtils.extractFirstUrl(input)
         if (cleanUrl == null) {
-            showToast("未找到有效链接，请重新输入")
+            showToast(getString(R.string.invalid_link_please_reenter))
             return
         }
         viewModel.resetWebCrawlFlag()
@@ -484,7 +484,7 @@ class MainActivity : ComponentActivity() {
                 data = Uri.fromParts("package", packageName, null)
             }
             startActivity(intent)
-            showToast("请授予所有文件访问权限后重试")
+            showToast(getString(R.string.grant_all_files_access_retry))
         } else {
             ActivityCompat.requestPermissions(
                 this,
@@ -514,9 +514,9 @@ class MainActivity : ComponentActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                showToast("已获得存储权限，可继续下载")
+                showToast(getString(R.string.storage_permission_granted_continue))
             } else {
-                showToast("缺少存储权限，无法保存文件")
+                showToast(getString(R.string.storage_permission_missing_unable_save))
             }
         }
     }
@@ -524,7 +524,7 @@ class MainActivity : ComponentActivity() {
     private fun openFile(item: MediaItem) {
         val file = File(item.path)
         if (!file.exists()) {
-            showToast("文件不存在：${item.path}")
+            showToast(getString(R.string.file_does_not_exist, item.path))
             return
         }
         val mimeType = when (item.type) {
@@ -538,7 +538,7 @@ class MainActivity : ComponentActivity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         kotlin.runCatching { startActivity(intent) }.onFailure {
-            showToast("无法打开文件：${it.message}")
+            showToast(getString(R.string.unable_to_open_file_error, it.message))
         }
     }
 
@@ -641,7 +641,7 @@ private fun MainScreen(
         Scaffold(
             contentWindowInsets = WindowInsets.statusBars.union(WindowInsets.displayCutout),
             topBar = {
-                val title = "小红书下载器"
+                val title = stringResource(R.string.app_full_name)
                 TopAppBar(
                     title = title,
                     largeTitle = title,
@@ -660,7 +660,7 @@ private fun MainScreen(
 //                                modifier = Modifier.size(24.dp)
                             )
 
-                            val menuItems = listOf("复制文案", "网页爬取", "清除历史记录")
+                            val menuItems = listOf(stringResource(R.string.copy_description), stringResource(R.string.web_crawl_option), stringResource(R.string.clear_history))
 
                             val showMenu = remember { mutableStateOf(false) }
                             LaunchedEffect(menuExpanded, uiState.isDownloading) {
@@ -704,8 +704,8 @@ private fun MainScreen(
                         // 清除历史记录确认对话框
                         if (showClearHistoryDialog) {
                             SuperDialog(
-                                title = "清除历史记录",
-                                summary = "确定要删除全部下载记录吗？已下载的文件不会被删除。",
+                                title = stringResource(R.string.clear_history_dialog_title),
+                                summary = stringResource(R.string.clear_history_dialog_message),
                                 show = remember { mutableStateOf(true) },
                                 onDismissRequest = { showClearHistoryDialog = false }
                             ) {
@@ -714,13 +714,13 @@ private fun MainScreen(
                                     modifier = Modifier.padding(top = 8.dp)
                                 ) {
                                     TextButton(
-                                        text = "取消",
+                                        text = stringResource(R.string.cancel),
                                         onClick = { showClearHistoryDialog = false },
                                         modifier = Modifier.weight(1f)
                                     )
                                     Spacer(Modifier.width(12.dp))
                                     TextButton(
-                                        text = "删除",
+                                        text = stringResource(R.string.apply),
                                         onClick = {
                                             onClearHistory()
                                             showClearHistoryDialog = false
@@ -877,8 +877,8 @@ private fun HistoryPage(
 
     if (taskToDelete != null) {
         SuperDialog(
-            title = "删除任务",
-            summary = "确定要删除这条下载记录吗？已下载的文件不会被删除。",
+            title = stringResource(R.string.delete_task_dialog_title),
+            summary = stringResource(R.string.delete_task_dialog_message),
             show = remember { mutableStateOf(taskToDelete != null) },
             onDismissRequest = { taskToDelete = null }
         ) {
@@ -887,13 +887,13 @@ private fun HistoryPage(
                 modifier = Modifier.padding(top = 8.dp)
             ) {
                 TextButton(
-                    text = "取消",
+                    text = stringResource(R.string.cancel),
                     onClick = { taskToDelete = null },
                     modifier = Modifier.weight(1f)
                 )
                 Spacer(Modifier.width(12.dp))
                 TextButton(
-                    text = "删除",
+                    text = stringResource(R.string.apply),
                     onClick = {
                         taskToDelete?.let { onDeleteTask(it) }
                         taskToDelete = null
@@ -920,7 +920,7 @@ private fun HistoryPage(
                 var selectedFilter by remember { mutableStateOf(0) }
                 val waitingCount = tasks.count { it.status == com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER }
                 val failedCount = tasks.count { it.status == com.neoruaa.xhsdn.data.TaskStatus.FAILED }
-                val filterLabels = listOf("全部", "等待选择($waitingCount)", "失败($failedCount)")
+                val filterLabels = listOf(stringResource(R.string.tab_all), stringResource(R.string.tab_waiting_for_selection, waitingCount), stringResource(R.string.tab_failed, failedCount))
                 val configuration = LocalConfiguration.current
                 TabRowWithContour(
                     tabs = filterLabels,
@@ -959,12 +959,12 @@ private fun HistoryPage(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = "暂无下载任务",
+                            text = stringResource(R.string.no_downloaded_files),
                             color = Color.Gray
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "点击底部按钮开始下载",
+                            text = stringResource(R.string.ready_to_download),
                             fontSize = 12.sp,
                             color = Color.Gray
                         )
@@ -1054,7 +1054,7 @@ private fun HistoryPage(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (uiState.isDownloading) "下载中..." else if (manualInputLinks) stringResource(R.string.manual_input_links) else "从剪贴板开始下载",
+                    text = if (uiState.isDownloading) stringResource(R.string.downloading_files_count, 0) else if (manualInputLinks) stringResource(R.string.manual_input_links) else stringResource(R.string.start_download_from_clipboard),
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -1103,7 +1103,7 @@ private fun HistoryPage(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "检测到小红书链接",
+                                text = stringResource(R.string.ready_to_download),
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF4CAF50)
                             )
@@ -1170,21 +1170,21 @@ private fun TaskCell(
     }
     
     val statusText = when (task.status) {
-        com.neoruaa.xhsdn.data.TaskStatus.QUEUED -> "排队中"
-        com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING -> "下载中"
-        com.neoruaa.xhsdn.data.TaskStatus.COMPLETED -> "已完成"
-        com.neoruaa.xhsdn.data.TaskStatus.FAILED -> "下载失败"
-        com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER -> "等待选择"
+        com.neoruaa.xhsdn.data.TaskStatus.QUEUED -> stringResource(R.string.task_status_queued)
+        com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING -> stringResource(R.string.task_status_downloading)
+        com.neoruaa.xhsdn.data.TaskStatus.COMPLETED -> stringResource(R.string.task_status_completed)
+        com.neoruaa.xhsdn.data.TaskStatus.FAILED -> stringResource(R.string.task_status_failed)
+        com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER -> stringResource(R.string.task_status_waiting_for_user)
     }
     
     val typeText = when (// Check if this is a web crawl task (created from WebViewActivity)
         task.noteType) {
         com.neoruaa.xhsdn.data.NoteType.UNKNOWN if (task.noteUrl?.contains("xhslink.com") == true ||
                 task.noteUrl?.contains("xiaohongshu.com") == true ||
-                task.noteUrl?.startsWith("http") == true && task.totalFiles > 0) -> "网页爬取"
-        com.neoruaa.xhsdn.data.NoteType.IMAGE -> "图文"
-        com.neoruaa.xhsdn.data.NoteType.VIDEO -> "视频"
-        com.neoruaa.xhsdn.data.NoteType.UNKNOWN -> "未知"
+                task.noteUrl?.startsWith("http") == true && task.totalFiles > 0) -> stringResource(R.string.note_type_web_crawl)
+        com.neoruaa.xhsdn.data.NoteType.IMAGE -> stringResource(R.string.note_type_image)
+        com.neoruaa.xhsdn.data.NoteType.VIDEO -> stringResource(R.string.note_type_video)
+        com.neoruaa.xhsdn.data.NoteType.UNKNOWN -> stringResource(R.string.note_type_unknown)
     }
     
     Column(
@@ -1252,14 +1252,14 @@ private fun TaskCell(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "$typeText · ${task.totalFiles} 个文件",
+                    text = stringResource(R.string.task_info_format, typeText, task.totalFiles),
                     fontSize = MiuixTheme.textStyles.body2.fontSize,
                     color = Color.Gray
                 )
 
                 if (task.failedFiles > 0) {
                     Text(
-                        text = " · ${task.failedFiles} 失败",
+                        text = stringResource(R.string.failed_files_format, task.failedFiles),
                         fontSize = MiuixTheme.textStyles.body2.fontSize,
                         color = Color(0xFFF44336)
                     )
@@ -1277,12 +1277,12 @@ private fun TaskCell(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "${task.completedFiles}/${task.totalFiles}",
+                            text = stringResource(R.string.files_completed_format, task.completedFiles, task.totalFiles),
                             fontSize = 11.sp,
                             color = Color.Gray
                         )
                         Text(
-                            text = "${(task.progress * 100).toInt()}%",
+                            text = stringResource(R.string.progress_format, (task.progress * 100).toInt()),
                             fontSize = 11.sp,
                             color = Color.Gray
                         )
@@ -1359,7 +1359,7 @@ private fun TaskCell(
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // 提示语
                         Text(
-                            text = "因官方限制，仅能下载低清版本。如需高清，选网页爬取。",
+                            text = stringResource(R.string.official_limitation_tip),
                             fontSize = 12.sp,
                             color = Color.Gray,
                             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
@@ -1384,7 +1384,7 @@ private fun TaskCell(
                                     MiuixTheme.colorScheme.onSurface
                                 )
                             ) {
-                                Text("网页爬取", color = MiuixTheme.colorScheme.onSurface)
+                                Text(stringResource(R.string.web_crawl_option), color = MiuixTheme.colorScheme.onSurface)
                             }
                         }
                     }
@@ -1411,7 +1411,7 @@ private fun TaskCell(
                             colors = ButtonDefaults.buttonColorsPrimary()
                         ) {
                             Text(
-                                text = "重试",
+                                text = stringResource(R.string.retry),
                                 color = Color.White
                             )
                         }
