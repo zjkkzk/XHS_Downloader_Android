@@ -1,8 +1,9 @@
 package com.neoruaa.xhsdn
 
 import android.Manifest
-import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.net.Uri
@@ -11,8 +12,6 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.widget.Toast
-import androidx.activity.result.ActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -113,34 +112,18 @@ import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.extra.SuperListPopup
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
+import androidx.compose.ui.res.stringResource
+import android.util.Log
+import kotlinx.coroutines.awaitCancellation
+import top.yukonga.miuix.kmp.basic.TextField
 
 // 缩略图内存缓存（最多缓存 50 张缩略图）
 private val thumbnailCache = object : LruCache<String, ImageBitmap>(50) {}
 
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
-
-    private val detailActivityLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        when (result.resultCode) {
-            RESULT_FIRST_USER -> { // Copy URL
-                // Just show a toast since URL is already copied in DetailActivity
-                showToast("已复制链接")
-            }
-            RESULT_FIRST_USER + 1 -> { // Web Crawl
-                // Handle web crawl from the result data
-                val webCrawlUrl = result.data?.getStringExtra("web_crawl_url")
-                if (!webCrawlUrl.isNullOrEmpty()) {
-                    // Trigger web crawl as a new task
-                    viewModel.updateUrl(webCrawlUrl)
-                    ensureStoragePermission {
-                        viewModel.startDownload { showToast(it) }
-                    }
-                }
-            }
-        }
-    }
-
     private val _autoDownloadIntentUrl = mutableStateOf<String?>(null)
+    private var context: Context =  this
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -178,9 +161,27 @@ class MainActivity : ComponentActivity() {
             }
             
             // 剪贴板检测相关状态
-            val context = androidx.compose.ui.platform.LocalContext.current
+            context = LocalContext.current
             val prefs = remember { context.getSharedPreferences("XHSDownloaderPrefs", MODE_PRIVATE) }
             var detectedXhsLink by remember { mutableStateOf<String?>(null) }
+            var manualInputLinks by remember { mutableStateOf(prefs.getBoolean("manual_input_links", false)) }
+
+            // 监听SharedPreferences变化，确保UI能够实时响应设置更改
+            LaunchedEffect(Unit) {
+                val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                    if (key == "manual_input_links") {
+                        manualInputLinks = prefs.getBoolean("manual_input_links", false)
+                    }
+                }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+
+                // 清理监听器
+                try {
+                    awaitCancellation()
+                } finally {
+                    prefs.unregisterOnSharedPreferenceChangeListener(listener)
+                }
+            }
             
             // 监听生命周期 ON_RESUME 和 ON_PAUSE 进行剪贴板监听器管理
             val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -190,19 +191,19 @@ class MainActivity : ComponentActivity() {
                 // 1. Refresh Preferences
                 val currentAutoRead = prefs.getBoolean("auto_read_clipboard", false)
                 val currentShowBubble = prefs.getBoolean("show_clipboard_bubble", true)
-                
-                android.util.Log.d("XHS_Debug", "checkClipboard: AutoRead=$currentAutoRead, ShowBubble=$currentShowBubble")
+
+                Log.d("XHS_Debug", "checkClipboard: AutoRead=$currentAutoRead, ShowBubble=$currentShowBubble, ManualInput=$manualInputLinks")
 
                 // 2. Access Clipboard
-                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clipboard = context.getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 if (clipboard.hasPrimaryClip()) {
                     val clipData = clipboard.primaryClip
                     if (clipData != null && clipData.itemCount > 0) {
                         val clipText = clipData.getItemAt(0).text?.toString() ?: ""
-                        android.util.Log.d("XHS_Debug", "ClipText: $clipText")
+                        Log.d("XHS_Debug", "ClipText: $clipText")
                         
                         val url = UrlUtils.extractFirstUrl(clipText)
-                        android.util.Log.d("XHS_Debug", "Extracted URL: $url")
+                        Log.d("XHS_Debug", "Extracted URL: $url")
                         
                         if (url != null && UrlUtils.isXhsLink(url)) {
                             // 3. Logic Branching
@@ -212,7 +213,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel.updateUrl(clipText)
                                 
                                 // ... (Auto download logic)
-                                android.util.Log.d("XHS_Debug", "Triggering Auto Download")
+                                Log.d("XHS_Debug", "Triggering Auto Download")
                                 
                                 // Trigger Download
                                 viewModel.startDownload { showToast(it) }
@@ -234,24 +235,24 @@ class MainActivity : ComponentActivity() {
                                 
                             } else if (currentShowBubble) {
                                 // B. Show Bubble
-                                android.util.Log.d("XHS_Debug", "Showing Bubble")
+                                Log.d("XHS_Debug", "Showing Bubble")
                                 detectedXhsLink = clipText 
                             } else {
-                                android.util.Log.d("XHS_Debug", "Bubble disabled in settings")
+                                Log.d("XHS_Debug", "Bubble disabled in settings")
                             }
                         } else {
                             // Link invalid or not detected -> Disappear
-                            android.util.Log.d("XHS_Debug", "Not XHS link or null -> Hide Bubble")
+                            Log.d("XHS_Debug", "Not XHS link or null -> Hide Bubble")
                             detectedXhsLink = null
                         }
                     } else {
                         // Clipboard empty -> Disappear
-                        android.util.Log.d("XHS_Debug", "Clipboard empty/null data -> Hide Bubble")
+                        Log.d("XHS_Debug", "Clipboard empty/null data -> Hide Bubble")
                         detectedXhsLink = null
                     }
                 } else {
                     // No clipboard -> Disappear
-                    android.util.Log.d("XHS_Debug", "No Primary Clip -> Hide Bubble")
+                    Log.d("XHS_Debug", "No Primary Clip -> Hide Bubble")
                     detectedXhsLink = null
                 }
             }
@@ -272,7 +273,7 @@ class MainActivity : ComponentActivity() {
                 val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
                     if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
                         // 注册监听器
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clipboard = context.getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         clipboard.addPrimaryClipChangedListener(clipboardListener)
                         // 延迟检测：Android 10+ 需要等待窗口焦点才能访问剪贴板
                         scope.launch {
@@ -281,52 +282,60 @@ class MainActivity : ComponentActivity() {
                         }
                     } else if (event == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) {
                         // 移除监听器
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clipboard = context.getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         clipboard.removePrimaryClipChangedListener(clipboardListener)
                     }
                 }
                 lifecycleOwner.lifecycle.addObserver(observer)
                 onDispose {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clipboard = context.getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                     clipboard.removePrimaryClipChangedListener(clipboardListener)
                     lifecycleOwner.lifecycle.removeObserver(observer)
                 }
             }
 
             MiuixTheme(controller = controller) {
+                // 手动输入链接对话框状态
+                var showInputDialog by remember { mutableStateOf(false) }
+
                 MainScreen(
                     uiState = uiState,
+                    manualInputLinks = manualInputLinks,
+                    showInputDialog = showInputDialog,
+                    onShowInputDialogChange = { showInputDialog = it },
                     scrollBehavior = scrollBehavior,
                     onDownload = {
-                        ensureStoragePermission {
-                            // 先读取剪贴板
-                            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                            val clipText = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
-                            // 提取有效链接
-                            val url = UrlUtils.extractFirstUrl(clipText)
-                            if (UrlUtils.isXhsLink(url)) {
-                                viewModel.updateUrl(clipText)
+                        if (!manualInputLinks) {
+                            ensureStoragePermission {
+                                // 先读取剪贴板
+                                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                val clipText = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                                // 提取有效链接
+                                val url = UrlUtils.extractFirstUrl(clipText)
+                                if (UrlUtils.isXhsLink(url)) {
+                                    viewModel.updateUrl(clipText)
 
-                                // 先开始下载（创建任务）
-                                viewModel.startDownload { showToast(it) }
+                                    // 先开始下载（创建任务）
+                                    viewModel.startDownload { showToast(it) }
 
-                                // 然后获取笔记文案并保存到刚创建的任务中
-                                viewModel.copyDescription(
-                                    onResult = { _ ->
-                                        // 文案已保存到任务中
-                                    },
-                                    onError = { _ ->
-                                        // 即使获取文案失败，也不影响下载
-                                    }
-                                )
-                            } else {
-                                showToast("剪贴板中未检测到小红书链接")
+                                    // 然后获取笔记文案并保存到刚创建的任务中
+                                    viewModel.copyDescription(
+                                        onResult = { _ ->
+                                            // 文案已保存到任务中
+                                        },
+                                        onError = { _ ->
+                                            // 即使获取文案失败，也不影响下载
+                                        }
+                                    )
+                                } else {
+                                    showToast("剪贴板中未检测到小红书链接")
+                                }
                             }
                         }
                     },
                     onCopyText = { 
                         // 先读取剪贴板
-                        val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         val clipText = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
                         if (clipText.isNotEmpty()) {
                             viewModel.updateUrl(clipText)
@@ -336,11 +345,11 @@ class MainActivity : ComponentActivity() {
                     onOpenSettings = { startActivity(Intent(this, SettingsActivity::class.java)) },
                     onWebCrawlFromClipboard = {
                         // 先读取剪贴板
-                        val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         val clipText = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
                         if (clipText.isNotEmpty()) {
                             // Clean the URL using the same method as other places
-                            val cleanUrl = com.neoruaa.xhsdn.utils.UrlUtils.extractFirstUrl(clipText)
+                            val cleanUrl = UrlUtils.extractFirstUrl(clipText)
                             if (cleanUrl != null) {
                                 val webViewIntent = Intent(this, WebViewActivity::class.java).apply {
                                     putExtra("url", cleanUrl)
@@ -356,7 +365,7 @@ class MainActivity : ComponentActivity() {
                     },
                     onMediaClick = { openFile(it) },
                     onCopyUrl = { url ->
-                        val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
                         clipboard.setPrimaryClip(android.content.ClipData.newPlainText("xhs_url", url))
                         showToast("已复制链接")
                     },
@@ -367,7 +376,7 @@ class MainActivity : ComponentActivity() {
                                     // 使用通用URL提取
                                     val cleanUrl = UrlUtils.extractFirstUrl(url)
                                     if (cleanUrl != null) {
-                                        val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(cleanUrl))
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(cleanUrl))
                                         startActivity(intent)
                                     } else {
                                         showToast("未找到有效链接")
@@ -400,12 +409,32 @@ class MainActivity : ComponentActivity() {
                          com.neoruaa.xhsdn.data.BackgroundDownloadManager.stopTask(task.id)
                     },
                     onClearHistory = { viewModel.clearHistory() },
+                    onManualInputDownload = { inputLink ->
+                        ensureStoragePermission {
+                            viewModel.updateUrl(inputLink)
+                            viewModel.startDownload { showToast(it) }
+
+                            // 获取笔记文案
+                            viewModel.copyDescription(
+                                onResult = { _ ->
+                                    // 文案已保存到任务中
+                                },
+                                onError = { _ ->
+                                    // 即使获取文案失败，也不影响下载
+                                }
+                            )
+                        }
+                    },
+                    onShowInputDialog = {
+                        showInputDialog = true
+                    },
                     detectedXhsLink = detectedXhsLink,
                     onDismissPrompt = { detectedXhsLink = null }
                 )
             }
         }
     }
+
 
     private fun launchWebView(input: String, taskId: Long? = null) {
         val cleanUrl = UrlUtils.extractFirstUrl(input)
@@ -520,7 +549,7 @@ class MainActivity : ComponentActivity() {
 
             val urls = data.getStringArrayListExtra("image_urls") ?: emptyList()
             val content = data.getStringExtra("content_text")
-            var taskId = data.getLongExtra("task_id", -1L).takeIf { it > 0 }
+            val taskId = data.getLongExtra("task_id", -1L).takeIf { it > 0 }
 
             if (urls.isNotEmpty()) {
                 // Debug: Show how many URLs were received
@@ -572,6 +601,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun MainScreen(
     uiState: MainUiState,
+    manualInputLinks: Boolean = false,
+    showInputDialog: Boolean = false,
+    onShowInputDialogChange: (Boolean) -> Unit,
     onDownload: () -> Unit,
     onCopyText: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -585,6 +617,8 @@ private fun MainScreen(
     onDeleteTask: (com.neoruaa.xhsdn.data.DownloadTask) -> Unit,
     onContinueTask: (com.neoruaa.xhsdn.data.DownloadTask) -> Unit,
     onWebCrawlTask: (com.neoruaa.xhsdn.data.DownloadTask) -> Unit,
+    onManualInputDownload: (String) -> Unit,
+    onShowInputDialog: () -> Unit,
     scrollBehavior: ScrollBehavior,
     detectedXhsLink: String?,
     onDismissPrompt: () -> Unit
@@ -645,12 +679,16 @@ private fun MainScreen(
                                             isSelected = false,
                                             onSelectedIndexChange = {
                                                 menuExpanded = false
-                                                if (index == 0) {
-                                                    onCopyText()
-                                                } else if (index == 1) {
-                                                    onWebCrawlFromClipboard()
-                                                } else if (index == 2) {
-                                                    showClearHistoryDialog = true
+                                                when (index) {
+                                                    0 -> {
+                                                        onCopyText()
+                                                    }
+                                                    1 -> {
+                                                        onWebCrawlFromClipboard()
+                                                    }
+                                                    2 -> {
+                                                        showClearHistoryDialog = true
+                                                    }
                                                 }
                                             },
                                             index = index,
@@ -711,8 +749,12 @@ private fun MainScreen(
         ) { padding ->
             HistoryPage(
                 uiState = uiState,
+                manualInputLinks = manualInputLinks,
                 statusListState = statusListState,
                 onDownload = onDownload,
+                onShowInputDialog = {
+                    onShowInputDialogChange(true)
+                },
                 onMediaClick = onMediaClick,
                 onCopyUrl = onCopyUrl,
                 onBrowseUrl = onBrowseUrl,
@@ -730,14 +772,85 @@ private fun MainScreen(
             )
         }
 
+        // 输入分享链接对话框
+        if (showInputDialog) {
+            val context = LocalContext.current
+            val manualInputTitle = stringResource(R.string.manual_input_links)
+            val enterXhsUrl = stringResource(R.string.enter_xhs_url)
+            val cancelText = stringResource(R.string.cancel)
+            val downloadButtonText = stringResource(R.string.download_button)
+            val pleaseEnterUrl = stringResource(R.string.please_enter_url)
+
+            var inputLink by remember { mutableStateOf("") }
+
+            val showDialogState = remember { mutableStateOf(showInputDialog) }
+            LaunchedEffect(showInputDialog) {
+                showDialogState.value = showInputDialog
+            }
+
+            SuperDialog(
+                title = manualInputTitle,
+                show = showDialogState,
+                summary = enterXhsUrl,
+                onDismissRequest = {
+                    onShowInputDialogChange(false)
+                    inputLink = ""
+                }
+            ) {
+                Column {
+                    TextField(
+                        value = inputLink,
+                        onValueChange = { inputLink = it },
+                        label = "http://xhslink.com/o/...",
+                        useLabelAsPlaceholder = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ContinuousRoundedRectangle(16.dp)),
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.padding(top = 16.dp)
+                    ) {
+                        TextButton(
+                            text = cancelText,
+                            onClick = {
+                                onShowInputDialogChange(false)
+                                inputLink = ""
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        TextButton(
+                            text = downloadButtonText,
+                            onClick = {
+                                if (inputLink.isNotEmpty()) {
+                                    // 执行手动输入下载
+                                    onManualInputDownload(inputLink)
+
+                                    // 关闭对话框并清空输入
+                                    onShowInputDialogChange(false)
+                                    inputLink = ""
+                                } else {
+                                    Toast.makeText(context, pleaseEnterUrl, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.textButtonColorsPrimary()
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 private fun HistoryPage(
     uiState: MainUiState,
+    manualInputLinks: Boolean = false,
     statusListState: androidx.compose.foundation.lazy.LazyListState,
     onDownload: () -> Unit,
+    onShowInputDialog: () -> Unit,
     onMediaClick: (MediaItem) -> Unit,
     onCopyUrl: (String) -> Unit,
     onBrowseUrl: (String) -> Unit,
@@ -757,9 +870,9 @@ private fun HistoryPage(
     val activeTask = tasks.firstOrNull {
         it.status == com.neoruaa.xhsdn.data.TaskStatus.DOWNLOADING || it.status == com.neoruaa.xhsdn.data.TaskStatus.QUEUED
     }
-    
+
     var taskToDelete by remember { mutableStateOf<com.neoruaa.xhsdn.data.DownloadTask?>(null) }
-    
+
     if (taskToDelete != null) {
         SuperDialog(
             title = "删除任务",
@@ -789,7 +902,7 @@ private fun HistoryPage(
             }
         }
     }
-    
+
     Box(modifier = modifier) {
         Card(
             modifier = Modifier.fillMaxSize(),
@@ -823,7 +936,7 @@ private fun HistoryPage(
                     onTabSelected = { selectedFilter = it },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 10.dp)
                 )
 
                 // 根据筛选条件过滤任务
@@ -920,8 +1033,14 @@ private fun HistoryPage(
                 .align(Alignment.BottomCenter)
                 .padding(start = 24.dp, end = 24.dp, bottom = navPadding + 16.dp)
                 .fillMaxWidth()
-                .clickable(enabled = !uiState.isDownloading) { onDownload() },
-            cornerRadius = 20.dp,
+                .clickable(enabled = !uiState.isDownloading) {
+                    if (manualInputLinks) {
+                        onShowInputDialog()
+                    } else {
+                        onDownload()
+                    }
+                },
+            cornerRadius = 18.dp,
             colors = CardDefaults.defaultColors(
                 color = if (uiState.isDownloading) MiuixTheme.colorScheme.primaryVariant else MiuixTheme.colorScheme.primary
             )
@@ -933,36 +1052,38 @@ private fun HistoryPage(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (uiState.isDownloading) "下载中..." else "开始下载",
+                    text = if (uiState.isDownloading) "下载中..." else if (manualInputLinks) stringResource(R.string.manual_input_links) else "从剪贴板开始下载",
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (uiState.isDownloading) (activeTask?.noteTitle ?: activeTask?.noteUrl ?: " ") else "点击读取剪贴板并下载",
-                    color = Color.White.copy(alpha = 0.8f),
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                )
+                if (uiState.isDownloading) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = activeTask?.noteTitle ?: activeTask?.noteUrl ?: " ",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
             }
         }
 
         // 剪贴板检测提示气泡（叠加层，靠近底部按钮）
-        if (detectedXhsLink != null && !uiState.isDownloading) {
+        if (detectedXhsLink != null && !uiState.isDownloading && !manualInputLinks) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .align(Alignment.BottomCenter)
-                    .padding(start = 24.dp, end = 24.dp, bottom = navPadding + 96.dp),
+                    .padding(start = 24.dp, end = 24.dp, bottom = navPadding + 76.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onDismissPrompt() },
-                    cornerRadius = 16.dp,
+                    cornerRadius = 18.dp,
                     colors = CardDefaults.defaultColors(
                         color = Color(0xFFDDECDE)
                     )
@@ -1016,6 +1137,7 @@ private fun HistoryPage(
                 }
             }
         }
+
     }
 }
 
@@ -1053,16 +1175,14 @@ private fun TaskCell(
         com.neoruaa.xhsdn.data.TaskStatus.WAITING_FOR_USER -> "等待选择"
     }
     
-    val typeText = when {
-        // Check if this is a web crawl task (created from WebViewActivity)
-        task.noteType == com.neoruaa.xhsdn.data.NoteType.UNKNOWN &&
-        (task.noteUrl?.contains("xhslink.com") == true ||
-         task.noteUrl?.contains("xiaohongshu.com") == true ||
-         task.noteUrl?.startsWith("http") == true && task.totalFiles > 0) -> "网页爬取"
-        task.noteType == com.neoruaa.xhsdn.data.NoteType.IMAGE -> "图文"
-        task.noteType == com.neoruaa.xhsdn.data.NoteType.VIDEO -> "视频"
-        task.noteType == com.neoruaa.xhsdn.data.NoteType.UNKNOWN -> "未知"
-        else -> "未知"
+    val typeText = when (// Check if this is a web crawl task (created from WebViewActivity)
+        task.noteType) {
+        com.neoruaa.xhsdn.data.NoteType.UNKNOWN if (task.noteUrl?.contains("xhslink.com") == true ||
+                task.noteUrl?.contains("xiaohongshu.com") == true ||
+                task.noteUrl?.startsWith("http") == true && task.totalFiles > 0) -> "网页爬取"
+        com.neoruaa.xhsdn.data.NoteType.IMAGE -> "图文"
+        com.neoruaa.xhsdn.data.NoteType.VIDEO -> "视频"
+        com.neoruaa.xhsdn.data.NoteType.UNKNOWN -> "未知"
     }
     
     Column(
@@ -1296,6 +1416,7 @@ private fun TaskCell(
                 }
             }
         }
+
     }
 }
 
@@ -1324,7 +1445,7 @@ private fun rememberThumbnail(item: MediaItem): ImageBitmap? {
             if (!file.exists()) return@withContext null
             val bitmap = runCatching {
                 when (item.type) {
-                    MediaType.IMAGE -> decodeSampledBitmap(file.path, 720, 720)?.asImageBitmap()
+                    MediaType.IMAGE -> decodeSampledBitmap(file.path, 200, 200)?.asImageBitmap()
                     MediaType.VIDEO -> createVideoThumbnail(file)?.asImageBitmap()
                     MediaType.OTHER -> null
                 }

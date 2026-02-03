@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -52,18 +53,6 @@ import com.kyant.capsule.ContinuousRoundedRectangle
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
-// 扩展函数：计算颜色亮度
-fun Color.luminance(): Float {
-    val r = if (red < 0.03928f) red / 12.92f else ((red + 0.055f) / 1.055f).pow(2.4f)
-    val g = if (green < 0.03928f) green / 12.92f else ((green + 0.055f) / 1.055f).pow(2.4f)
-    val b = if (blue < 0.03928f) blue / 12.92f else ((blue + 0.055f) / 1.055f).pow(2.4f)
-    return 0.2126f * r + 0.7152f * g + 0.0722f * b
-}
-
-// 扩展函数：计算颜色的幂次方
-fun Float.pow(exp: Float): Float {
-    return pow(exp)
-}
 
 /**
  * A [TabRow] with Miuix style.
@@ -286,20 +275,18 @@ private fun TabItem(
     fontSize: TextUnit = 14.sp,
 ) {
     val currentOnClick by rememberUpdatedState(onClick)
-    val pressState = remember { mutableStateOf(false) }
-    val isPressed by pressState
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
     // 计算按压状态下的颜色
     val textColor by remember(color, isSelected, isPressed) {
         derivedStateOf {
             if (isPressed) {
-                // 按压时颜色变暗（浅色模式）或变亮（深色模式）
-                if (color.luminance() > 0.5f) {
-                    // 浅色模式，按压时变暗
-                    color.copy(alpha = 0.6f)
+                // 按压时降低透明度
+                if (color == Color.Unspecified) {
+                    color
                 } else {
-                    // 深色模式，按压时变亮
-                    color.copy(alpha = 0.8f)
+                    color.copy(alpha = 0.6f)
                 }
             } else {
                 color
@@ -309,9 +296,6 @@ private fun TabItem(
 
     Surface(
         shape = shape,
-        onClick = {
-            currentOnClick()
-        },
         color = Color.Transparent,
         modifier = Modifier
             .fillMaxHeight()
@@ -321,7 +305,7 @@ private fun TabItem(
                     currentOnClick()
                 },
                 indication = null, // 移除点击波纹效果
-                interactionSource = remember { MutableInteractionSource() } // 提供空的交互源
+                interactionSource = interactionSource
             )
             .semantics { role = Role.Tab },
     ) {
@@ -353,20 +337,18 @@ private fun TabItemWithContour(
     fontSize: TextUnit = 14.sp,
 ) {
     val currentOnClick by rememberUpdatedState(onClick)
-    val pressState = remember { mutableStateOf(false) }
-    val isPressed by pressState
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
     // 计算按压状态下的颜色
     val textColor by remember(color, isSelected, isPressed) {
         derivedStateOf {
             if (isPressed) {
-                // 按压时颜色变暗（浅色模式）或变亮（深色模式）
-                if (color.luminance() > 0.5f) {
-                    // 浅色模式，按压时变暗
-                    color.copy(alpha = 0.6f)
+                // 按压时降低透明度
+                if (color == Color.Unspecified) {
+                    color
                 } else {
-                    // 深色模式，按压时变亮
-                    color.copy(alpha = 0.8f)
+                    color.copy(alpha = 0.6f)
                 }
             } else {
                 color
@@ -382,7 +364,7 @@ private fun TabItemWithContour(
             .clickable(
                 onClick = { currentOnClick() },
                 indication = null, // 移除点击波纹效果
-                interactionSource = remember { MutableInteractionSource() } // 提供空的交互源
+                interactionSource = interactionSource
             )
             .semantics { role = Role.Tab },
         contentAlignment = contentAlignment,

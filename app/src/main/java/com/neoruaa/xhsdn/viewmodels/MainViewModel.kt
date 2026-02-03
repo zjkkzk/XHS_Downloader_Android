@@ -554,8 +554,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val desc = XHSDownloader(getApplication(), null).getNoteDescription(targetUrl)
             withContext(Dispatchers.Main) {
                 if (!desc.isNullOrEmpty()) {
-                    copyToClipboard(desc)
-                    appendStatus("已复制文案：\n$desc")
+//                    copyToClipboard(desc)
+                    appendStatus("已提取文案：\n$desc")
 
                     // 如果当前有任务ID，则更新任务的笔记内容
                     if (currentTaskId > 0) {

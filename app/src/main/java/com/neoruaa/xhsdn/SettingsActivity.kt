@@ -98,7 +98,8 @@ data class SettingsUiState(
     val tokens: List<NamingFormat.TokenDefinition> = emptyList(),
     val debugNotificationEnabled: Boolean = false,
     val showClipboardBubble: Boolean = true,
-    val autoReadClipboard: Boolean = false
+    val autoReadClipboard: Boolean = false,
+    val manualInputLinks: Boolean = false
 )
 
 class SettingsViewModel(private val prefs: SharedPreferences) : ViewModel() {
@@ -118,6 +119,7 @@ class SettingsViewModel(private val prefs: SharedPreferences) : ViewModel() {
         val debugNotificationEnabled = prefs.getBoolean("debug_notification_enabled", false)
         val showClipboardBubble = prefs.getBoolean("show_clipboard_bubble", true) // Default true
         val autoReadClipboard = prefs.getBoolean("auto_read_clipboard", false)
+        val manualInputLinks = prefs.getBoolean("manual_input_links", false)
         return SettingsUiState(
             createLivePhotos = createLivePhotos,
             useCustomNaming = useCustomNaming,
@@ -125,7 +127,8 @@ class SettingsViewModel(private val prefs: SharedPreferences) : ViewModel() {
             tokens = NamingFormat.getAvailableTokens(),
             debugNotificationEnabled = debugNotificationEnabled,
             showClipboardBubble = showClipboardBubble,
-            autoReadClipboard = autoReadClipboard
+            autoReadClipboard = autoReadClipboard,
+            manualInputLinks = manualInputLinks
         )
     }
 
@@ -175,6 +178,12 @@ class SettingsViewModel(private val prefs: SharedPreferences) : ViewModel() {
         }
     }
 
+    fun onManualInputLinksChange(enabled: Boolean) = updateState {
+        it.copy(manualInputLinks = enabled).also { newState ->
+            persist(newState)
+        }
+    }
+
     private fun persist(state: SettingsUiState) {
         hasChanges = true
         prefs.edit()
@@ -184,6 +193,7 @@ class SettingsViewModel(private val prefs: SharedPreferences) : ViewModel() {
             .putBoolean("debug_notification_enabled", state.debugNotificationEnabled)
             .putBoolean("show_clipboard_bubble", state.showClipboardBubble)
             .putBoolean("auto_read_clipboard", state.autoReadClipboard)
+            .putBoolean("manual_input_links", state.manualInputLinks)
             .remove("use_metadata_file_names")
             .apply()
     }
@@ -250,7 +260,7 @@ class SettingsActivity : ComponentActivity() {
                     onDebugNotificationChange = viewModel::onDebugNotificationChange,
                     onShowClipboardBubbleChange = viewModel::onShowClipboardBubbleChange,
                     onAutoReadClipboardChange = viewModel::onAutoReadClipboardChange,
-
+                    onManualInputLinksChange = viewModel::onManualInputLinksChange,
                     topBarState = topBarState
                 )
             }
@@ -284,7 +294,8 @@ private fun SettingsScreen(
     onDebugNotificationChange: (Boolean) -> Unit,
     onShowClipboardBubbleChange: (Boolean) -> Unit,
     onAutoReadClipboardChange: (Boolean) -> Unit,
-    topBarState: top.yukonga.miuix.kmp.basic.TopAppBarState
+    onManualInputLinksChange: (Boolean) -> Unit,
+    topBarState: TopAppBarState
 ) {
     val context = LocalContext.current
     val scrollBehavior = top.yukonga.miuix.kmp.basic.MiuixScrollBehavior(state = topBarState)
@@ -358,18 +369,27 @@ private fun SettingsScreen(
                         .padding(bottom = 12.dp)
                 ) {
                     MiuixSwitchWidget(
-                        title = stringResource(R.string.show_clipboard_bubble),
-                        description = stringResource(R.string.show_clipboard_bubble_desc),
-                        checked = uiState.showClipboardBubble,
-                        onCheckedChange = onShowClipboardBubbleChange
+                        title = stringResource(R.string.manual_input_links),
+                        description = stringResource(R.string.manual_input_links_desc),
+                        checked = uiState.manualInputLinks,
+                        onCheckedChange = onManualInputLinksChange
                     )
 
-                    MiuixSwitchWidget(
-                        title = stringResource(R.string.auto_read_clipboard),
-                        description = stringResource(R.string.auto_read_clipboard_desc),
-                        checked = uiState.autoReadClipboard,
-                        onCheckedChange = onAutoReadClipboardChange
-                    )
+                    if (!uiState.manualInputLinks) {
+                        MiuixSwitchWidget(
+                            title = stringResource(R.string.show_clipboard_bubble),
+                            description = stringResource(R.string.show_clipboard_bubble_desc),
+                            checked = uiState.showClipboardBubble,
+                            onCheckedChange = onShowClipboardBubbleChange
+                        )
+
+                        MiuixSwitchWidget(
+                            title = stringResource(R.string.auto_read_clipboard),
+                            description = stringResource(R.string.auto_read_clipboard_desc),
+                            checked = uiState.autoReadClipboard,
+                            onCheckedChange = onAutoReadClipboardChange
+                        )
+                    }
                 }
             }
 
@@ -390,64 +410,66 @@ private fun SettingsScreen(
                         onCheckedChange = onUseCustomNamingChange
                     )
 
-                    TextField(
-                        value = uiState.template,
-                        onValueChange = onTemplateChange,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                            .clip(ContinuousRoundedRectangle(14.dp)),
-                        label = stringResource(R.string.naming_template),
-                        enabled = uiState.useCustomNaming,
-                        singleLine = false,
-                        maxLines = 3,
-                        keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
-                        keyboardActions = KeyboardActions(onDone = { }),
-                        trailingIcon = {
-                            if (uiState.useCustomNaming) {
-                                Icon(
-                                    imageVector = MiuixIcons.Refresh,
-                                    contentDescription = stringResource(R.string.reset_template),
-                                    modifier = Modifier
-                                        .padding(end = 16.dp)
-                                        .size(20.dp)
-                                        .clickable { onResetTemplate() }
+                    if (uiState.useCustomNaming) {
+                        TextField(
+                            value = uiState.template,
+                            onValueChange = onTemplateChange,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                                .clip(ContinuousRoundedRectangle(14.dp)),
+                            label = stringResource(R.string.naming_template),
+                            enabled = uiState.useCustomNaming,
+                            singleLine = false,
+                            maxLines = 3,
+                            keyboardOptions = KeyboardOptions.Default.copy(imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { }),
+                            trailingIcon = {
+                                if (uiState.useCustomNaming) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Refresh,
+                                        contentDescription = stringResource(R.string.reset_template),
+                                        modifier = Modifier
+                                            .padding(end = 16.dp)
+                                            .size(20.dp)
+                                            .clickable { onResetTemplate() }
+                                    )
+                                }
+                            }
+                        )
+
+                        Text(
+                            text = stringResource(R.string.insert_placeholder_hint),
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            fontSize = 14.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                        )
+
+                        TokenGrid(
+                            tokens = uiState.tokens,
+                            enabled = uiState.useCustomNaming,
+                            onInsert = { placeholder ->
+                                val current = uiState.template
+                                val selectionStart = current.selection.start.coerceAtLeast(0)
+                                val selectionEnd = current.selection.end.coerceAtLeast(0)
+                                val min = minOf(selectionStart, selectionEnd)
+                                val max = maxOf(selectionStart, selectionEnd)
+                                val newText = buildString {
+                                    append(current.text.substring(0, min))
+                                    append(placeholder)
+                                    append(current.text.substring(max))
+                                }
+                                val newSelection = min + placeholder.length
+                                onTemplateChange(
+                                    TextFieldValue(
+                                        text = newText,
+                                        selection = androidx.compose.ui.text.TextRange(newSelection)
+                                    )
                                 )
                             }
-                        }
-                    )
-
-                    Text(
-                        text = stringResource(R.string.insert_placeholder_hint),
-                        modifier = Modifier
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary
-                    )
-
-                    TokenGrid(
-                        tokens = uiState.tokens,
-                        enabled = uiState.useCustomNaming,
-                        onInsert = { placeholder ->
-                            val current = uiState.template
-                            val selectionStart = current.selection.start.coerceAtLeast(0)
-                            val selectionEnd = current.selection.end.coerceAtLeast(0)
-                            val min = minOf(selectionStart, selectionEnd)
-                            val max = maxOf(selectionStart, selectionEnd)
-                            val newText = buildString {
-                                append(current.text.substring(0, min))
-                                append(placeholder)
-                                append(current.text.substring(max))
-                            }
-                            val newSelection = min + placeholder.length
-                            onTemplateChange(
-                                TextFieldValue(
-                                    text = newText,
-                                    selection = androidx.compose.ui.text.TextRange(newSelection)
-                                )
-                            )
-                        }
-                    )
+                        )
+                    }
                 }
             }
 
