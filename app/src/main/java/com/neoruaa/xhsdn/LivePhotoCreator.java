@@ -1,5 +1,7 @@
 package com.neoruaa.xhsdn;
 
+import android.content.Context;
+import android.media.MediaScannerConnection;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
@@ -16,9 +18,10 @@ public class LivePhotoCreator {
      * @param imageFile The image file to use as the primary content
      * @param videoFile The video file to embed
      * @param outputFile The output live photo file
+     * @param context Android context for MediaStore operations
      * @return True if successful, false otherwise
      */
-    public static boolean createLivePhoto(File imageFile, File videoFile, File outputFile) {
+    public static boolean createLivePhoto(File imageFile, File videoFile, File outputFile, Context context) {
         try {
             Log.d(TAG, "Creating live photo from image: " + imageFile.getAbsolutePath() + 
                    " (size: " + imageFile.length() + " bytes) and video: " + videoFile.getAbsolutePath() + 
@@ -53,6 +56,11 @@ public class LivePhotoCreator {
                 jpegFile.delete();
             }
             
+            // Trigger MediaStore scan to ensure the file is properly indexed
+            if (result && context != null) {
+                triggerMediaStoreScan(context, outputFile);
+            }
+            
             return result;
             
         } catch (Exception e) {
@@ -64,6 +72,15 @@ public class LivePhotoCreator {
             }
             return false;
         }
+    }
+
+    private static void triggerMediaStoreScan(Context context, File file) {
+        MediaScannerConnection.scanFile(
+            context,
+            new String[]{file.getAbsolutePath()},
+            new String[]{"image/jpeg"},  // MIME 类型
+            (path, uri) -> Log.d(TAG, "Scanned: " + path + " -> " + uri)
+        );
     }
     
     /**
