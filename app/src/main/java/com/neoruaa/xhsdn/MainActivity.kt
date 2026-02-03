@@ -61,7 +61,6 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
@@ -114,6 +113,8 @@ import top.yukonga.miuix.kmp.extra.SuperListPopup
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import androidx.compose.ui.res.stringResource
 import android.util.Log
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.awaitCancellation
 import top.yukonga.miuix.kmp.basic.TextField
 
@@ -648,8 +649,8 @@ private fun MainScreen(
                     actions = {
                         Box(
                             modifier = Modifier
-                                .padding(end = 12.dp)
-                                .size(48.dp)
+                                .padding(end = 24.dp)
+//                                .size(48.dp)
                                 .clickable { menuExpanded = !menuExpanded },
                             contentAlignment = Alignment.Center
                         ) {
@@ -668,6 +669,7 @@ private fun MainScreen(
 
                             SuperListPopup(
                                 show = showMenu,
+                                popupModifier = Modifier.offset(x = (-60).dp),
                                 alignment = PopupPositionProvider.Align.TopEnd,
                                 onDismissRequest = { menuExpanded = false }
                             ) {
@@ -1210,7 +1212,8 @@ private fun TaskCell(
                 // 创建时间
                 Text(
                     text = formatTime(task.createdAt),
-                    fontSize = 12.sp,
+                    fontSize = MiuixTheme.textStyles.body2.fontSize,
+                    fontWeight = FontWeight.Medium,
                     color = Color.Gray,
                     modifier = Modifier.padding(start = 2.dp)
                 )
@@ -1236,7 +1239,7 @@ private fun TaskCell(
             // 标题（最多两行）
             Text(
                 text = task.noteTitle ?: task.noteUrl,
-                fontSize = 14.sp,
+                fontSize = MiuixTheme.textStyles.body2.fontSize,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
@@ -1250,14 +1253,14 @@ private fun TaskCell(
             ) {
                 Text(
                     text = "$typeText · ${task.totalFiles} 个文件",
-                    fontSize = 12.sp,
+                    fontSize = MiuixTheme.textStyles.body2.fontSize,
                     color = Color.Gray
                 )
 
                 if (task.failedFiles > 0) {
                     Text(
                         text = " · ${task.failedFiles} 失败",
-                        fontSize = 12.sp,
+                        fontSize = MiuixTheme.textStyles.body2.fontSize,
                         color = Color(0xFFF44336)
                     )
                 }

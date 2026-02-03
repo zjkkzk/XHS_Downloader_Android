@@ -3,7 +3,6 @@ package com.neoruaa.xhsdn
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.app.Activity
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
@@ -32,6 +31,7 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -51,7 +51,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neoruaa.xhsdn.viewmodels.DetailViewModel
@@ -94,6 +93,7 @@ import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.icon.extended.Play
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
@@ -104,21 +104,6 @@ data class DetailUiState(
     val isDownloading: Boolean = false,
     val noteContent: String? = null
 )
-
-class DetailViewModel : ViewModel() {
-    private val _state = androidx.compose.runtime.mutableStateOf(DetailUiState())
-    val state: androidx.compose.runtime.State<DetailUiState> = _state
-
-    fun updateState(newState: DetailUiState) {
-        _state.value = newState
-    }
-
-    fun removeMediaItem(itemToRemove: MediaItem) {
-        val currentState = _state.value
-        val updatedItems = currentState.mediaItems.filterNot { it.path == itemToRemove.path }
-        _state.value = currentState.copy(mediaItems = updatedItems)
-    }
-}
 
 class DetailActivity : ComponentActivity() {
     companion object {
@@ -325,6 +310,7 @@ private fun DetailScreen(
 
                         SuperListPopup(
                             show = showMenu,
+                            popupModifier = Modifier.offset(x = (-20).dp),
                             alignment = PopupPositionProvider.Align.TopEnd,
                             onDismissRequest = { menuExpanded = false }
                         ) {
@@ -414,6 +400,8 @@ private fun FilesPage(
                         SelectionContainer {
                             Text(
                                 text = uiState.noteContent,
+                                fontSize = MiuixTheme.textStyles.headline1.fontSize,
+                                fontWeight = FontWeight.Medium,
                                 color = MiuixTheme.colorScheme.onBackground
                             )
                         }
