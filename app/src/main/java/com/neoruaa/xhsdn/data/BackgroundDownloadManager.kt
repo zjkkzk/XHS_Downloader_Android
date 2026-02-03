@@ -33,6 +33,8 @@ object BackgroundDownloadManager {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeJobs = ConcurrentHashMap<Long, Job>()
     private val activeUrls = ConcurrentHashMap.newKeySet<String>()
+    // Track current file progress for each task
+    private val taskCurrentFileProgress = ConcurrentHashMap<Long, Float>()
     private const val CHANNEL_ID = "xhs_download_channel_v2"
     private const val BASE_NOTIFICATION_ID = 1000
 
@@ -106,7 +108,9 @@ object BackgroundDownloadManager {
                 val downloader = XHSDownloader(appContext, object : DownloadCallback {
                     override fun onFileDownloaded(filePath: String) {
                          val completed = completedFiles.incrementAndGet()
-                         TaskManager.updateProgress(taskId, completed, failedFiles.get())
+                         // Reset current file progress when file completes
+                         taskCurrentFileProgress[taskId] = 0f
+                         TaskManager.updateProgress(taskId, completed, failedFiles.get(), 0f)
                          TaskManager.addFilePath(taskId, filePath)
                          // Update notification if needed
                     }
@@ -119,7 +123,28 @@ object BackgroundDownloadManager {
                     }
 
                     override fun onDownloadProgress(status: String) {}
-                    override fun onDownloadProgressUpdate(downloaded: Long, total: Long) {}
+                    override fun onDownloadProgressUpdate(downloaded: Long, total: Long) {
+                        // Calculate individual file progress (0.0 to 1.0)
+                        val currentFileProgress = if (total > 0 && downloaded >= 0) {
+                            if (downloaded <= total) {
+                                // Normal case: downloaded is less than or equal to total
+                                downloaded.toFloat() / total.toFloat()
+                            } else {
+                                // Edge case: downloaded exceeds total (could happen with dynamic content)
+                                // Cap at 1.0 to prevent progress > 100%
+                                1.0f
+                            }
+                        } else {
+                            0f
+                        }
+
+                        // Store the current file progress for this task
+                        taskCurrentFileProgress[taskId] = currentFileProgress
+
+                        // Update task progress with current file progress
+                        // Use cached completed/failed counts to avoid database query
+                        TaskManager.updateProgress(taskId, completedFiles.get(), failedFiles.get(), currentFileProgress)
+                    }
                     override fun onVideoDetected() {
                          // Update task type to VIDEO as we found real video content
                          TaskManager.updateTaskType(taskId, NoteType.VIDEO)
@@ -169,6 +194,8 @@ object BackgroundDownloadManager {
                // Remove job from activeJobs map regardless of success or failure
                 if (taskId != -1L) {
                     activeJobs.remove(taskId)
+                    // Clean up current file progress tracking
+                    taskCurrentFileProgress.remove(taskId)
                 }
                 activeUrls.remove(url)
             }
@@ -181,6 +208,8 @@ object BackgroundDownloadManager {
         if (job != null) {
             job.cancel()
             TaskManager.completeTask(taskId, false, "用户手动停止")
+            // Clean up current file progress tracking
+            taskCurrentFileProgress.remove(taskId)
             Log.d(TAG, "Task $taskId stopped by user")
         }
     }

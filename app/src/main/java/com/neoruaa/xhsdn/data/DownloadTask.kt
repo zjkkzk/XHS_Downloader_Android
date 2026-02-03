@@ -39,6 +39,7 @@ data class DownloadTask(
     val totalFiles: Int,           // 总文件数
     val completedFiles: Int = 0,   // 已完成文件数
     val failedFiles: Int = 0,      // 失败文件数
+    val currentFileProgress: Float = 0f, // 当前文件下载进度 (0.0 to 1.0)
     val status: TaskStatus,        // 任务状态
     val createdAt: Long,           // 创建时间
     val completedAt: Long? = null, // 完成时间
@@ -47,7 +48,11 @@ data class DownloadTask(
     val noteContent: String? = null // 笔记内容
 ) {
     val progress: Float
-        get() = if (totalFiles > 0) (completedFiles.toFloat() / totalFiles) else 0f
+        get() = if (totalFiles > 0) {
+            val calculatedProgress = (completedFiles + currentFileProgress) / totalFiles.toFloat()
+            // Ensure progress is between 0.0 and 1.0
+            calculatedProgress.coerceIn(0f, 1f)
+        } else 0f
     
     val isActive: Boolean
         get() = status == TaskStatus.QUEUED || status == TaskStatus.DOWNLOADING || status == TaskStatus.WAITING_FOR_USER
@@ -64,6 +69,7 @@ data class DownloadTask(
             put("totalFiles", totalFiles)
             put("completedFiles", completedFiles)
             put("failedFiles", failedFiles)
+            put("currentFileProgress", currentFileProgress)
             put("status", status.name)
             put("createdAt", createdAt)
             put("completedAt", completedAt ?: 0L)
@@ -72,7 +78,7 @@ data class DownloadTask(
             put("noteContent", noteContent ?: "")
         }
     }
-    
+
     companion object {
         fun fromJson(json: JSONObject): DownloadTask {
             return DownloadTask(
@@ -83,6 +89,7 @@ data class DownloadTask(
                 totalFiles = json.getInt("totalFiles"),
                 completedFiles = json.optInt("completedFiles", 0),
                 failedFiles = json.optInt("failedFiles", 0),
+                currentFileProgress = json.optDouble("currentFileProgress", 0.0).toFloat(),
                 status = try { TaskStatus.valueOf(json.getString("status")) } catch (e: Exception) { TaskStatus.COMPLETED },
                 createdAt = json.getLong("createdAt"),
                 completedAt = json.optLong("completedAt", 0L).takeIf { it > 0 },
@@ -215,7 +222,7 @@ object TaskManager {
     /**
      * 更新任务进度
      */
-    fun updateProgress(taskId: Long, completedFiles: Int, failedFiles: Int) {
+    fun updateProgress(taskId: Long, completedFiles: Int, failedFiles: Int, currentFileProgress: Float = 0f) {
         updateTask(taskId) { task ->
             val totalCompleted = completedFiles + failedFiles
             val newStatus = when {
@@ -224,15 +231,38 @@ object TaskManager {
                 }
                 else -> TaskStatus.DOWNLOADING
             }
-            task.copy(
-                status = newStatus,
-                completedFiles = completedFiles,
-                failedFiles = failedFiles,
-                completedAt = if (newStatus in listOf(TaskStatus.COMPLETED, TaskStatus.FAILED)) 
-                    System.currentTimeMillis() 
-                else null,
-                errorMessage = if (failedFiles > 0) "部分文件下载失败" else null
-            )
+
+            // Calculate the new progress to compare with the current progress
+            val newProgress = if (task.totalFiles > 0) {
+                (completedFiles + currentFileProgress) / task.totalFiles.toFloat()
+            } else {
+                0f
+            }
+
+            val currentProgress = if (task.totalFiles > 0) {
+                (task.completedFiles + task.currentFileProgress) / task.totalFiles.toFloat()
+            } else {
+                0f
+            }
+
+            // Only update if the new progress is greater than or equal to the current progress to prevent regression
+            val shouldUpdate = newProgress >= currentProgress
+
+            if (shouldUpdate) {
+                task.copy(
+                    status = newStatus,
+                    completedFiles = completedFiles,
+                    failedFiles = failedFiles,
+                    currentFileProgress = currentFileProgress,
+                    completedAt = if (newStatus in listOf(TaskStatus.COMPLETED, TaskStatus.FAILED))
+                        System.currentTimeMillis()
+                    else null,
+                    errorMessage = if (failedFiles > 0) "部分文件下载失败" else null
+                )
+            } else {
+                // Return the task unchanged to prevent progress regression
+                task
+            }
         }
     }
 

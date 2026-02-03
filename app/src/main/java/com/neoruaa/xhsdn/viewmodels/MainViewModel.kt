@@ -72,6 +72,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         private set
     private var taskCompletedFiles: Int = 0
     private var taskFailedFiles: Int = 0
+    private var taskCurrentFileProgress: Float = 0f
+    private var maxTaskProgress: Float = 0f
+
+    // Throttling for task progress updates to reduce database writes
+    private var lastTaskProgressUpdateTime = 0L
+    private val TASK_PROGRESS_UPDATE_INTERVAL = 200L // 200ms interval between updates
 
     fun cancelCurrentDownload() {
         if (downloadJob?.isActive == true) {
@@ -236,13 +242,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 downloadedCount++
                                 taskCompletedFiles++
                                 currentFileProgress = 0f
+                                taskCurrentFileProgress = 0f
+                                // Update task progress using local ID before updating UI progress, with throttling
+                                val currentTime = System.currentTimeMillis()
+                                if (currentTime - lastTaskProgressUpdateTime >= TASK_PROGRESS_UPDATE_INTERVAL) {
+                                    TaskManager.updateProgress(
+                                        myTaskId,
+                                        taskCompletedFiles,
+                                        taskFailedFiles,
+                                        taskCurrentFileProgress
+                                    )
+                                    lastTaskProgressUpdateTime = currentTime
+                                }
                                 updateProgress()
-                                // Update task progress using local ID
-                                TaskManager.updateProgress(
-                                    myTaskId,
-                                    taskCompletedFiles,
-                                    taskFailedFiles
-                                )
                                 TaskManager.addFilePath(myTaskId, filePath)
                             }
                         }
@@ -259,11 +271,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         } else 0f
 
                         // Calculate individual file progress (0.0 to 1.0)
-                        currentFileProgress = if (total > 0) {
-                            downloaded.toFloat() / total.toFloat()
+                        currentFileProgress = if (total > 0 && downloaded >= 0) {
+                            if (downloaded <= total) {
+                                // Normal case: downloaded is less than or equal to total
+                                downloaded.toFloat() / total.toFloat()
+                            } else {
+                                // Edge case: downloaded exceeds total (could happen with dynamic content)
+                                // Cap at 1.0 to prevent progress > 100%
+                                1.0f
+                            }
                         } else {
                             0f
                         }
+
+                        // Update task's current file progress
+                        taskCurrentFileProgress = currentFileProgress
 
                         // Calculate download speed more responsively
                         val currentTime = System.currentTimeMillis()
@@ -297,6 +319,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                         // Update overall progress
                         updateProgress()
+
+                        // Update task progress with current file progress, with throttling
+                        if (currentTime - lastTaskProgressUpdateTime >= TASK_PROGRESS_UPDATE_INTERVAL) {
+                            TaskManager.updateProgress(
+                                myTaskId,
+                                taskCompletedFiles,
+                                taskFailedFiles,
+                                taskCurrentFileProgress
+                            )
+                            lastTaskProgressUpdateTime = currentTime
+                        }
 
                         // Always update UI state with current progress and speed
                         val progressText =
@@ -469,7 +502,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 TaskManager.updateProgress(
                                     myTaskId,
                                     taskCompletedFiles,
-                                    taskFailedFiles
+                                    taskFailedFiles,
+                                    taskCurrentFileProgress
                                 )
                                 TaskManager.addFilePath(myTaskId, filePath)
                             }
@@ -486,7 +520,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         } else 0f
                         currentFileProgress =
                             if (total > 0) downloaded.toFloat() / total.toFloat() else 0f
+                        taskCurrentFileProgress = currentFileProgress
                         updateProgress()
+
+                        // Update task progress with current file progress, with throttling
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastTaskProgressUpdateTime >= TASK_PROGRESS_UPDATE_INTERVAL) {
+                            TaskManager.updateProgress(
+                                myTaskId,
+                                taskCompletedFiles,
+                                taskFailedFiles,
+                                taskCurrentFileProgress
+                            )
+                            lastTaskProgressUpdateTime = currentTime
+                        }
+
                         val progressText =
                             "${String.format("%.1f", progressPercent)}%｜$lastCalculatedSpeed"
                         _uiState.update { currentState ->
@@ -669,7 +717,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 taskId?.let { id ->
                                     TaskManager.addFilePath(id, filePath)
                                     // Update the completed files count in the task manager
-                                    TaskManager.updateProgress(id, downloadedCount, 0)
+                                    TaskManager.updateProgress(id, downloadedCount, 0, taskCurrentFileProgress)
                                 }
                             }
                         }
@@ -686,11 +734,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         } else 0f
 
                         // Calculate individual file progress (0.0 to 1.0)
-                        currentFileProgress = if (total > 0) {
-                            downloaded.toFloat() / total.toFloat()
+                        currentFileProgress = if (total > 0 && downloaded >= 0) {
+                            if (downloaded <= total) {
+                                // Normal case: downloaded is less than or equal to total
+                                downloaded.toFloat() / total.toFloat()
+                            } else {
+                                // Edge case: downloaded exceeds total (could happen with dynamic content)
+                                // Cap at 1.0 to prevent progress > 100%
+                                1.0f
+                            }
                         } else {
                             0f
                         }
+
+                        // Update task's current file progress
+                        taskCurrentFileProgress = currentFileProgress
 
                         // Calculate download speed more responsively
                         val currentTime = System.currentTimeMillis()
@@ -724,6 +782,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                         // Update overall progress
                         updateProgress()
+
+                        // Update task progress with current file progress, with throttling
+                        // For web crawl, use the taskId parameter if available
+                        taskId?.let { id ->
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastTaskProgressUpdateTime >= TASK_PROGRESS_UPDATE_INTERVAL) {
+                                TaskManager.updateProgress(
+                                    id,
+                                    downloadedCount, // For web crawl, use downloadedCount as completed files
+                                    0, // For web crawl, failed files are handled differently
+                                    taskCurrentFileProgress
+                                )
+                                lastTaskProgressUpdateTime = currentTime
+                            }
+                        }
 
                         // Always update UI state with current progress and speed
                         val progressText =
@@ -917,6 +990,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         lastOverallProgress = overallProgress
 
         _uiState.update { it.copy(progressLabel = label, progress = overallProgress) }
+
+        // Also update the corresponding task in TaskManager if it exists
+        if (currentTaskId > 0) {
+            // Calculate the new task progress based on taskCompletedFiles and taskCurrentFileProgress
+            val newTaskProgress = if (totalMediaCount > 0) {
+                (taskCompletedFiles + taskCurrentFileProgress) / totalMediaCount.toFloat()
+            } else {
+                0f
+            }
+
+            // Ensure task progress doesn't regress by using maxTaskProgress
+            maxTaskProgress = maxOf(maxTaskProgress, newTaskProgress)
+
+            // Update task progress with throttling
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastTaskProgressUpdateTime >= TASK_PROGRESS_UPDATE_INTERVAL) {
+                TaskManager.updateProgress(
+                    currentTaskId,
+                    taskCompletedFiles,
+                    taskFailedFiles,
+                    taskCurrentFileProgress
+                )
+                lastTaskProgressUpdateTime = currentTime
+            }
+        }
     }
 
     private fun appendStatus(message: String) {

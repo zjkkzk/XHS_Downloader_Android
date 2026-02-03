@@ -19,7 +19,7 @@
     <string name="settings">设置</string>
     <string name="default_save_path_info">所有文件将保存到内置存储的Pictures或Movies + \"xhsdn\"子文件夹</string>
     <string name="cancel">取消</string>
-    <string name="apply">应用</string>
+    <string name="apply">确认</string>
     <string name="settings_saved">设置保存成功</string>
     <string name="open_github_repository">打开GitHub仓库</string>
     <string name="create_live_photos">创建安卓动态照片</string>
@@ -181,4 +181,5 @@
     <string name="web_crawl_option">网页爬取</string>
     <string name="clear_history">清除历史记录</string>
     <string name="download_detail_title">下载详情</string>
+    <string name="downloading_files">正在下载...</string>
 </resources>

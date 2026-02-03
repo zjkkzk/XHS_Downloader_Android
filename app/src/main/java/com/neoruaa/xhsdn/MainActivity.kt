@@ -587,7 +587,7 @@ class MainActivity : ComponentActivity() {
         } else {
             // Debug: Show that result was not as expected
             if (requestCode == WEBVIEW_REQUEST_CODE) {
-                showToast("WebView返回结果异常: resultCode=$resultCode")
+//                showToast("WebView返回结果异常: resultCode=$resultCode")
             }
         }
     }
@@ -1054,7 +1054,7 @@ private fun HistoryPage(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = if (uiState.isDownloading) stringResource(R.string.downloading_files_count, 0) else if (manualInputLinks) stringResource(R.string.manual_input_links) else stringResource(R.string.start_download_from_clipboard),
+                    text = if (uiState.isDownloading) stringResource(R.string.downloading_files) else if (manualInputLinks) stringResource(R.string.manual_input_links) else stringResource(R.string.start_download_from_clipboard),
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold

@@ -181,4 +181,5 @@
     <string name="web_crawl_option">Web Crawl</string>
     <string name="clear_history">Clear History</string>
     <string name="download_detail_title">Download Details</string>
+    <string name="downloading_files">Downloading...</string>
 </resources>
