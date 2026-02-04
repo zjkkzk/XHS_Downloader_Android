@@ -429,9 +429,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     },
-                    onShowInputDialog = {
-                        showInputDialog = true
-                    },
                     detectedXhsLink = detectedXhsLink,
                     onDismissPrompt = { detectedXhsLink = null }
                 )
@@ -622,7 +619,6 @@ private fun MainScreen(
     onContinueTask: (com.neoruaa.xhsdn.data.DownloadTask) -> Unit,
     onWebCrawlTask: (com.neoruaa.xhsdn.data.DownloadTask) -> Unit,
     onManualInputDownload: (String) -> Unit,
-    onShowInputDialog: () -> Unit,
     scrollBehavior: ScrollBehavior,
     detectedXhsLink: String?,
     onDismissPrompt: () -> Unit
@@ -755,11 +751,11 @@ private fun MainScreen(
             HistoryPage(
                 uiState = uiState,
                 manualInputLinks = manualInputLinks,
+                showInputDialog = showInputDialog,
+                onShowInputDialogChange = onShowInputDialogChange,
                 statusListState = statusListState,
                 onDownload = onDownload,
-                onShowInputDialog = {
-                    onShowInputDialogChange(true)
-                },
+                onManualInputDownload = onManualInputDownload,
                 onMediaClick = onMediaClick,
                 onCopyUrl = onCopyUrl,
                 onBrowseUrl = onBrowseUrl,
@@ -776,76 +772,6 @@ private fun MainScreen(
                 nestedScrollConnection = miuixScrollBehavior.nestedScrollConnection
             )
         }
-
-        // 输入分享链接对话框
-        if (showInputDialog) {
-            val context = LocalContext.current
-            val manualInputTitle = stringResource(R.string.manual_input_links)
-            val enterXhsUrl = stringResource(R.string.enter_xhs_url)
-            val cancelText = stringResource(R.string.cancel)
-            val downloadButtonText = stringResource(R.string.download_button)
-            val pleaseEnterUrl = stringResource(R.string.please_enter_url)
-
-            var inputLink by remember { mutableStateOf("") }
-
-            val showDialogState = remember { mutableStateOf(showInputDialog) }
-            LaunchedEffect(showInputDialog) {
-                showDialogState.value = showInputDialog
-            }
-
-            SuperDialog(
-                title = manualInputTitle,
-                show = showDialogState,
-                summary = enterXhsUrl,
-                onDismissRequest = {
-                    onShowInputDialogChange(false)
-                    inputLink = ""
-                }
-            ) {
-                Column {
-                    TextField(
-                        value = inputLink,
-                        onValueChange = { inputLink = it },
-                        label = "http://xhslink.com/o/...",
-                        useLabelAsPlaceholder = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(ContinuousRoundedRectangle(16.dp)),
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.padding(top = 16.dp)
-                    ) {
-                        TextButton(
-                            text = cancelText,
-                            onClick = {
-                                onShowInputDialogChange(false)
-                                inputLink = ""
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        TextButton(
-                            text = downloadButtonText,
-                            onClick = {
-                                if (inputLink.isNotEmpty()) {
-                                    // 执行手动输入下载
-                                    onManualInputDownload(inputLink)
-
-                                    // 关闭对话框并清空输入
-                                    onShowInputDialogChange(false)
-                                    inputLink = ""
-                                } else {
-                                    Toast.makeText(context, pleaseEnterUrl, Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.textButtonColorsPrimary()
-                        )
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -853,9 +779,11 @@ private fun MainScreen(
 private fun HistoryPage(
     uiState: MainUiState,
     manualInputLinks: Boolean = false,
+    showInputDialog: Boolean = false,
+    onShowInputDialogChange: (Boolean) -> Unit,
     statusListState: androidx.compose.foundation.lazy.LazyListState,
     onDownload: () -> Unit,
-    onShowInputDialog: () -> Unit,
+    onManualInputDownload: (String) -> Unit,
     onMediaClick: (MediaItem) -> Unit,
     onCopyUrl: (String) -> Unit,
     onBrowseUrl: (String) -> Unit,
@@ -1049,7 +977,7 @@ private fun HistoryPage(
                 .fillMaxWidth()
                 .clickable(enabled = !uiState.isDownloading) {
                     if (manualInputLinks) {
-                        onShowInputDialog()
+                        onShowInputDialogChange(true)
                     } else {
                         onDownload()
                     }
@@ -1159,6 +1087,76 @@ private fun HistoryPage(
                         path = path,
                         color = Color(0xFFDDECDE)
                     )
+                }
+            }
+        }
+
+        // 输入分享链接对话框（放在 HistoryPage 内，避免键盘偏移异常）
+        if (showInputDialog) {
+            val context = LocalContext.current
+            val manualInputTitle = stringResource(R.string.manual_input_links)
+            val enterXhsUrl = stringResource(R.string.enter_xhs_url)
+            val cancelText = stringResource(R.string.cancel)
+            val downloadButtonText = stringResource(R.string.download_button)
+            val pleaseEnterUrl = stringResource(R.string.please_enter_url)
+
+            var inputLink by remember { mutableStateOf("") }
+
+            val showDialogState = remember { mutableStateOf(showInputDialog) }
+            LaunchedEffect(showInputDialog) {
+                showDialogState.value = showInputDialog
+            }
+
+            SuperDialog(
+                title = manualInputTitle,
+                show = showDialogState,
+                summary = enterXhsUrl,
+                onDismissRequest = {
+                    onShowInputDialogChange(false)
+                    inputLink = ""
+                }
+            ) {
+                Column {
+                    TextField(
+                        value = inputLink,
+                        onValueChange = { inputLink = it },
+                        label = "http://xhslink.com/o/...",
+                        useLabelAsPlaceholder = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ContinuousRoundedRectangle(16.dp)),
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.padding(top = 16.dp)
+                    ) {
+                        TextButton(
+                            text = cancelText,
+                            onClick = {
+                                onShowInputDialogChange(false)
+                                inputLink = ""
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        TextButton(
+                            text = downloadButtonText,
+                            onClick = {
+                                if (inputLink.isNotEmpty()) {
+                                    // 执行手动输入下载
+                                    onManualInputDownload(inputLink)
+
+                                    // 关闭对话框并清空输入
+                                    onShowInputDialogChange(false)
+                                    inputLink = ""
+                                } else {
+                                    Toast.makeText(context, pleaseEnterUrl, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.textButtonColorsPrimary()
+                        )
+                    }
                 }
             }
         }
@@ -1523,5 +1521,3 @@ private fun createVideoThumbnail(file: File): android.graphics.Bitmap? {
         )
     }
 }
-
-
