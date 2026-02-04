@@ -21,8 +21,10 @@ import com.neoruaa.xhsdn.data.NoteType
 import kotlinx.coroutines.CancellationException
 import android.util.Log
 import com.neoruaa.xhsdn.DownloadCallback
+import com.neoruaa.xhsdn.R
 import com.neoruaa.xhsdn.XHSDownloader
 import com.neoruaa.xhsdn.data.DownloadTask
+import com.neoruaa.xhsdn.utils.NotificationHelper
 
 
 data class MediaItem(val path: String, val type: MediaType)
@@ -78,6 +80,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Throttling for task progress updates to reduce database writes
     private var lastTaskProgressUpdateTime = 0L
     private val TASK_PROGRESS_UPDATE_INTERVAL = 100L // 100ms interval between updates
+    private val debugNotificationImportantKeywords = listOf(
+        "开始",
+        "完成",
+        "失败",
+        "错误",
+        "出错",
+        "取消",
+        "停止",
+        "检测到视频",
+        "网页转存",
+        "提示"
+    )
 
     fun cancelCurrentDownload() {
         if (downloadJob?.isActive == true) {
@@ -1020,6 +1034,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun appendStatus(message: String) {
         _uiState.update { it.copy(status = it.status + message) }
         Log.d("XHSDownloader", message)
+        showDebugNotification(message)
+    }
+
+    private fun showDebugNotification(message: String) {
+        val appContext = getApplication<Application>()
+        val title = appContext.getString(R.string.debug_notifications)
+        val important = isImportantStatusMessage(message)
+        NotificationHelper.showOrUpdateDebugNotification(appContext, title, message, important)
+    }
+
+    private fun isImportantStatusMessage(message: String): Boolean {
+        if (message.contains("✅") || message.contains("❌") || message.contains("⏹️")) {
+            return true
+        }
+        return debugNotificationImportantKeywords.any { keyword -> message.contains(keyword) }
     }
 
     private fun extractTitleFromUrl(url: String): String? {

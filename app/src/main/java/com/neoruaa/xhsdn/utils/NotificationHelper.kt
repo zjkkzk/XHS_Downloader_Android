@@ -15,6 +15,7 @@ object NotificationHelper {
     private const val DIAGNOSTIC_CHANNEL_ID = "xhs_diagnostic_channel_v2"
     private const val DOWNLOAD_GROUP = "com.neoruaa.xhsdn.DOWNLOAD_GROUP"
     const val MONITOR_STATUS_ID = 1001 // 固定 ID，确保所有监控状态通知使用同一个槽位
+    const val DEBUG_STATUS_ID = 1002 // 调试通知专用 ID，避免与监控通知互相覆盖
 
     fun showDiagnosticNotification(context: Context, title: String, content: String, id: Int = MONITOR_STATUS_ID) {
         val appContext = context.applicationContext
@@ -40,6 +41,46 @@ object NotificationHelper {
 
         // 强制 Pop-up 关键：先取消旧的，再发新的，强制系统视为新通知
         notificationManager.cancel(id)
+        notificationManager.notify(id, builder.build())
+    }
+
+    fun showOrUpdateDebugNotification(
+        context: Context,
+        title: String,
+        content: String,
+        important: Boolean,
+        id: Int = DEBUG_STATUS_ID
+    ) {
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences("XHSDownloaderPrefs", Context.MODE_PRIVATE)
+        val isDebugEnabled = prefs.getBoolean("debug_notification_enabled", false)
+
+        if (!isDebugEnabled) {
+            cancelNotification(appContext, id)
+            return
+        }
+
+        createDiagnosticChannel(appContext)
+        val notificationManager = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val builder = NotificationCompat.Builder(appContext, DIAGNOSTIC_CHANNEL_ID)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle(title)
+            .setContentText(content)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(content))
+            .setPriority(if (important) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(false)
+            .setGroup("diagnostic")
+            .setOnlyAlertOnce(!important)
+            .setSilent(!important)
+
+        if (important) {
+            builder.setDefaults(NotificationCompat.DEFAULT_ALL)
+            notificationManager.cancel(id) // 强制弹出/提醒
+        } else {
+            builder.setDefaults(0)
+        }
+
         notificationManager.notify(id, builder.build())
     }
 
