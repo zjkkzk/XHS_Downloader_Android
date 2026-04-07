@@ -20,16 +20,16 @@ public final class NamingFormat {
     public static final String TOKEN_DOWNLOAD_TIMESTAMP = "downloadTimestamp";
 
     public static final String DEFAULT_TEMPLATE =
-            buildPlaceholder(TOKEN_USERNAME) + "(" + buildPlaceholder(TOKEN_USER_ID) + ")" +
-            buildPlaceholder(TOKEN_TITLE);
+            buildPlaceholder(TOKEN_TITLE) + "(" + buildPlaceholder(TOKEN_USERNAME) + ")_" +
+            buildPlaceholder(TOKEN_PUBLISH_TIME);
 
     private static final List<TokenDefinition> TOKEN_DEFINITIONS = Collections.unmodifiableList(Arrays.asList(
             new TokenDefinition(TOKEN_USERNAME, R.string.token_username),
             new TokenDefinition(TOKEN_USER_ID, R.string.token_user_id),
             new TokenDefinition(TOKEN_TITLE, R.string.token_title),
             new TokenDefinition(TOKEN_POST_ID, R.string.token_post_id),
-            new TokenDefinition(TOKEN_PUBLISH_TIME, R.string.token_publish_time),
-            new TokenDefinition(TOKEN_DOWNLOAD_TIMESTAMP, R.string.token_download_timestamp)
+            new TokenDefinition(TOKEN_DOWNLOAD_TIMESTAMP, R.string.token_download_timestamp),
+            new TokenDefinition(TOKEN_PUBLISH_TIME, R.string.token_publish_time)
     ));
 
     private NamingFormat() {
