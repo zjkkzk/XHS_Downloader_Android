@@ -1,6 +1,10 @@
 package com.neoruaa.xhsdn;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.media.MediaScannerConnection;
 import android.util.Log;
 
@@ -88,25 +92,94 @@ public class LivePhotoCreator {
      * This handles WebP, PNG, JPEG (re-encode), and any other supported format
      */
     private static boolean convertToJpeg(File inputFile, File jpegFile) {
+        Bitmap bitmap = null;
+        Bitmap normalizedBitmap = null;
         try {
             // Decode the image using Android's BitmapFactory (supports many formats)
-            android.graphics.Bitmap bitmap = android.graphics.BitmapFactory.decodeFile(inputFile.getAbsolutePath());
+            bitmap = BitmapFactory.decodeFile(inputFile.getAbsolutePath());
             if (bitmap == null) {
                 Log.e(TAG, "Failed to decode image: " + inputFile.getAbsolutePath());
                 return false;
             }
-            
-            Log.d(TAG, "Decoded image: " + bitmap.getWidth() + "x" + bitmap.getHeight());
-            
+
+            normalizedBitmap = normalizeBitmapOrientation(inputFile, bitmap);
+            Log.d(TAG, "Decoded image: " + bitmap.getWidth() + "x" + bitmap.getHeight() +
+                    ", normalized: " + normalizedBitmap.getWidth() + "x" + normalizedBitmap.getHeight());
+
             // Compress as JPEG with high quality
             try (FileOutputStream fos = new FileOutputStream(jpegFile)) {
-                boolean success = bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 95, fos);
-                bitmap.recycle();
-                return success;
+                return normalizedBitmap.compress(Bitmap.CompressFormat.JPEG, 95, fos);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error converting to JPEG: " + e.getMessage());
             return false;
+        } finally {
+            if (normalizedBitmap != null && normalizedBitmap != bitmap && !normalizedBitmap.isRecycled()) {
+                normalizedBitmap.recycle();
+            }
+            if (bitmap != null && !bitmap.isRecycled()) {
+                bitmap.recycle();
+            }
+        }
+    }
+
+    private static Bitmap normalizeBitmapOrientation(File inputFile, Bitmap bitmap) {
+        try {
+            ExifInterface exif = new ExifInterface(inputFile.getAbsolutePath());
+            int orientation = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+            if (orientation == ExifInterface.ORIENTATION_UNDEFINED ||
+                    orientation == ExifInterface.ORIENTATION_NORMAL) {
+                return bitmap;
+            }
+
+            Matrix matrix = new Matrix();
+            switch (orientation) {
+                case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+                    matrix.setScale(-1f, 1f);
+                    break;
+                case ExifInterface.ORIENTATION_ROTATE_180:
+                    matrix.setRotate(180f);
+                    break;
+                case ExifInterface.ORIENTATION_FLIP_VERTICAL:
+                    matrix.setScale(1f, -1f);
+                    break;
+                case ExifInterface.ORIENTATION_TRANSPOSE:
+                    matrix.setRotate(90f);
+                    matrix.postScale(-1f, 1f);
+                    break;
+                case ExifInterface.ORIENTATION_ROTATE_90:
+                    matrix.setRotate(90f);
+                    break;
+                case ExifInterface.ORIENTATION_TRANSVERSE:
+                    matrix.setRotate(270f);
+                    matrix.postScale(-1f, 1f);
+                    break;
+                case ExifInterface.ORIENTATION_ROTATE_270:
+                    matrix.setRotate(270f);
+                    break;
+                default:
+                    return bitmap;
+            }
+
+            Bitmap normalizedBitmap = Bitmap.createBitmap(
+                    bitmap,
+                    0,
+                    0,
+                    bitmap.getWidth(),
+                    bitmap.getHeight(),
+                    matrix,
+                    true
+            );
+            Log.d(
+                    TAG,
+                    "Applied EXIF orientation " + orientation +
+                            " (rotation=" + ImageOrientationUtils.rotationDegrees(orientation) +
+                            ", swapsDimensions=" + ImageOrientationUtils.swapsWidthAndHeight(orientation) + ")"
+            );
+            return normalizedBitmap;
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to read EXIF orientation, using original bitmap: " + e.getMessage());
+            return bitmap;
         }
     }
     
