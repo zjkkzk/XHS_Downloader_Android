@@ -108,18 +108,17 @@ import com.neoruaa.xhsdn.viewmodels.MediaType
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
-import top.yukonga.miuix.kmp.extra.SuperDialog
-import top.yukonga.miuix.kmp.extra.SuperListPopup
+import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowListPopup
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import androidx.compose.ui.res.stringResource
 import android.util.Log
-import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.text.font.FontWeight
+import com.neoruaa.xhsdn.ui.rememberOffsetPopupPositionProvider
 import kotlinx.coroutines.awaitCancellation
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.extended.File
 import top.yukonga.miuix.kmp.icon.extended.Link
-import top.yukonga.miuix.kmp.icon.extended.Update
 
 // 缩略图内存缓存（最多缓存 50 张缩略图）
 private val thumbnailCache = object : LruCache<String, ImageBitmap>(50) {}
@@ -648,7 +647,7 @@ private fun MainScreen(
                     actions = {
                         Box(
                             modifier = Modifier
-                                .padding(end = 24.dp)
+                                .padding(end = 20.dp)
 //                                .size(48.dp)
                                 .clickable { menuExpanded = !menuExpanded },
                             contentAlignment = Alignment.Center
@@ -661,14 +660,9 @@ private fun MainScreen(
 
                             val menuItems = listOf(stringResource(R.string.copy_description), stringResource(R.string.web_crawl_option), stringResource(R.string.clear_history))
 
-                            val showMenu = remember { mutableStateOf(false) }
-                            LaunchedEffect(menuExpanded, uiState.isDownloading) {
-                                showMenu.value = menuExpanded && !uiState.isDownloading
-                            }
-
-                            SuperListPopup(
-                                show = showMenu,
-                                popupModifier = Modifier.offset(x = (-60).dp),
+                            WindowListPopup(
+                                show = menuExpanded && !uiState.isDownloading,
+                                popupPositionProvider = rememberOffsetPopupPositionProvider(x = (-60).dp),
                                 alignment = PopupPositionProvider.Align.TopEnd,
                                 onDismissRequest = { menuExpanded = false }
                             ) {
@@ -702,10 +696,10 @@ private fun MainScreen(
 
                         // 清除历史记录确认对话框
                         if (showClearHistoryDialog) {
-                            SuperDialog(
+                            WindowDialog(
                                 title = stringResource(R.string.clear_history_dialog_title),
                                 summary = stringResource(R.string.clear_history_dialog_message),
-                                show = remember { mutableStateOf(true) },
+                                show = true,
                                 onDismissRequest = { showClearHistoryDialog = false }
                             ) {
                                 Row(
@@ -733,7 +727,7 @@ private fun MainScreen(
 
                         Box(
                             modifier = Modifier
-                                .padding(end = 26.dp)
+                                .padding(end = 12.dp)
 //                                .size(48.dp)
                                 .clickable { onOpenSettings() },
                             contentAlignment = Alignment.Center
@@ -807,10 +801,10 @@ private fun HistoryPage(
     var taskToDelete by remember { mutableStateOf<com.neoruaa.xhsdn.data.DownloadTask?>(null) }
 
     if (taskToDelete != null) {
-        SuperDialog(
+        WindowDialog(
             title = stringResource(R.string.delete_task_dialog_title),
             summary = stringResource(R.string.delete_task_dialog_message),
-            show = remember { mutableStateOf(taskToDelete != null) },
+            show = taskToDelete != null,
             onDismissRequest = { taskToDelete = null }
         ) {
             Row(
@@ -1102,14 +1096,9 @@ private fun HistoryPage(
 
             var inputLink by remember { mutableStateOf("") }
 
-            val showDialogState = remember { mutableStateOf(showInputDialog) }
-            LaunchedEffect(showInputDialog) {
-                showDialogState.value = showInputDialog
-            }
-
-            SuperDialog(
+            WindowDialog(
                 title = manualInputTitle,
-                show = showDialogState,
+                show = showInputDialog,
                 summary = enterXhsUrl,
                 onDismissRequest = {
                     onShowInputDialogChange(false)

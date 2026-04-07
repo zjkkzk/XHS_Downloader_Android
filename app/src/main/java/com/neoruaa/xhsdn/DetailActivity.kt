@@ -31,7 +31,6 @@ import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -86,14 +85,14 @@ import com.neoruaa.xhsdn.viewmodels.MediaType
 import com.neoruaa.xhsdn.utils.detectMediaType
 import com.neoruaa.xhsdn.utils.decodeSampledBitmap
 import com.neoruaa.xhsdn.utils.createVideoThumbnail
-import top.yukonga.miuix.kmp.extra.SuperDialog
-import top.yukonga.miuix.kmp.extra.SuperListPopup
+import top.yukonga.miuix.kmp.window.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowListPopup
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.icon.extended.Play
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import com.neoruaa.xhsdn.ui.rememberOffsetPopupPositionProvider
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
 import top.yukonga.miuix.kmp.basic.PopupPositionProvider
@@ -276,14 +275,14 @@ private fun DetailScreen(
                         imageVector = MiuixIcons.Back,
                         contentDescription = stringResource(R.string.back_content_description),
                         modifier = Modifier
-                            .padding(start = 26.dp)
+                            .padding(start = 12.dp)
                             .clickable { onBack() }
                     )
                 },
                 actions = {
                     Box(
                         modifier = Modifier
-                                .padding(end = 26.dp)
+                                .padding(end = 12.dp)
                                 .clickable { menuExpanded = true },
                             contentAlignment = Alignment.Center
                     ) {
@@ -298,14 +297,9 @@ private fun DetailScreen(
 //                            stringResource(R.string.web_crawl_action)
                         )
 
-                        val showMenu = remember { mutableStateOf(false) }
-                        LaunchedEffect(menuExpanded) {
-                            showMenu.value = menuExpanded
-                        }
-
-                        SuperListPopup(
-                            show = showMenu,
-                            popupModifier = Modifier.offset(x = (-20).dp),
+                        WindowListPopup(
+                            show = menuExpanded,
+                            popupPositionProvider = rememberOffsetPopupPositionProvider(x = (-20).dp),
                             alignment = PopupPositionProvider.Align.TopEnd,
                             onDismissRequest = { menuExpanded = false }
                         ) {
@@ -517,10 +511,10 @@ private fun MediaPreview(item: MediaItem, onClick: () -> Unit, onDelete: (MediaI
     }
 
     if (showDeleteDialog) {
-        SuperDialog(
+        WindowDialog(
             title = stringResource(R.string.delete_file_dialog_title),
             summary = stringResource(R.string.delete_file_dialog_message, fileName),
-            show = remember { mutableStateOf(true) },
+            show = true,
             onDismissRequest = { showDeleteDialog = false }
         ) {
             Row(
@@ -646,8 +640,6 @@ private val thumbnailCache = object : LinkedHashMap<String, ImageBitmap>(100, 0.
         return size > 100
     }
 }
-
-
 
 
 

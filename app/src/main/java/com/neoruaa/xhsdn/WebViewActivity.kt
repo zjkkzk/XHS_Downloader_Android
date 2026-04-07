@@ -176,7 +176,7 @@ private fun WebViewScreen(
                         imageVector = MiuixIcons.Back,
                         contentDescription = "返回",
                         modifier = Modifier
-                            .padding(start = 26.dp)
+                            .padding(start = 12.dp)
                             .clickable { onBack() }
                     )
                 },

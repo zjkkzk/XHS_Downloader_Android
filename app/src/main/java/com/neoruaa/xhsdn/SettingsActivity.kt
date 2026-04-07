@@ -297,7 +297,7 @@ private fun SettingsScreen(
                         imageVector = MiuixIcons.Back,
                         contentDescription = stringResource(R.string.back),
                         modifier = Modifier
-                            .padding(start = 26.dp)
+                            .padding(start = 12.dp)
                             .clickable { onBack() }
                     )
                 },
