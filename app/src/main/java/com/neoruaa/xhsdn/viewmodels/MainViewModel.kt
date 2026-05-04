@@ -15,6 +15,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import com.neoruaa.xhsdn.data.TaskManager
 import com.neoruaa.xhsdn.data.TaskStatus
 import com.neoruaa.xhsdn.data.NoteType
@@ -385,21 +386,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 // Always update TaskManager with the final result
                 val finalCompleted = localCompletedFiles.get()
                 val finalFailed = localFailedFiles.get()
-                if (success && finalCompleted > 0) {
-                    TaskManager.completeTask(myTaskId, true)
-                } else {
-                    TaskManager.completeTask(myTaskId, false, "下载过程出错")
+                
+                // A task is only truly successful if success is true AND there are no failed files
+                val isStrictSuccess = success && finalFailed == 0 && finalCompleted > 0
+                
+                // Generate a descriptive error message if not strictly successful
+                val errorMsg = when {
+                    isStrictSuccess -> null
+                    !success -> "解析或下载中断"
+                    finalCompleted == 0 -> "未发现可下载资源"
+                    finalFailed > 0 -> "部分下载失败 ($finalFailed)"
+                    else -> "下载过程异常"
                 }
+                
+                TaskManager.completeTask(myTaskId, isStrictSuccess, errorMsg)
 
                 // Only update UI if this is still the active task
                 if (myTaskId == currentTaskId) {
                     withContext(Dispatchers.Main) {
                         _uiState.update { it.copy(isDownloading = false) }
-                        if (success && finalCompleted > 0) {
-                            appendStatus("✅ 下载完成")
-                        } else {
-                            appendStatus("下载失败")
+                        val uiStatus = when {
+                            isStrictSuccess -> "✅ 下载完成"
+                            finalFailed > 0 && finalCompleted > 0 -> "⚠️ 部分下载失败 ($finalFailed)"
+                            else -> "❌ 下载失败"
                         }
+                        appendStatus(uiStatus)
                     }
                 }
             } catch (e: Exception) {
@@ -551,15 +562,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val success = downloader.downloadContent(targetUrl)
                 withContext(Dispatchers.Main) {
-                    if (success && taskCompletedFiles > 0 && taskFailedFiles == 0) {
-                        TaskManager.completeTask(myTaskId, true)
-                    } else {
-                        val errorMessage = if (taskCompletedFiles > 0 && taskFailedFiles > 0) {
-                            "部分文件下载失败"
-                        } else {
-                            "下载过程出错"
+                    val isStrictSuccess = success && taskCompletedFiles > 0 && taskFailedFiles == 0
+                    
+                    val errorMsg = when {
+                        isStrictSuccess -> null
+                        !success -> "解析或下载中断"
+                        taskCompletedFiles == 0 -> "未发现可下载资源"
+                        taskFailedFiles > 0 -> "部分下载失败 ($taskFailedFiles)"
+                        else -> "下载过程异常"
+                    }
+                    
+                    TaskManager.completeTask(myTaskId, isStrictSuccess, errorMsg)
+                    
+                    if (myTaskId == currentTaskId) {
+                        val uiStatus = when {
+                            isStrictSuccess -> "✅ 下载完成"
+                            taskFailedFiles > 0 && taskCompletedFiles > 0 -> "⚠️ 部分下载失败 ($taskFailedFiles)"
+                            else -> "❌ 下载失败"
                         }
-                        TaskManager.completeTask(myTaskId, false, errorMessage)
+                        appendStatus(uiStatus)
                     }
                 }
             } catch (e: CancellationException) {
@@ -955,6 +976,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: InterruptedException) {
             Thread.currentThread().interrupt()
         }
+
+        // If the job was cancelled, throw a CancellationException to jump to the catch block.
+        // This prevents the caller from incorrectly marking the task as "FAILED" with a generic error message.
+        // Using ensureActive() is the standard way to check for cancellation and throw the exception.
+        job?.ensureActive()
 
         return result
     }
