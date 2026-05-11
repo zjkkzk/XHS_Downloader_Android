@@ -56,5 +56,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Lyrico-release
-          path: lyrico-app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 3
