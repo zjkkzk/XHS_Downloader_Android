@@ -70,6 +70,7 @@ public class XHSDownloader {
     private volatile boolean shouldStopOnVideo = false;
     // Flag to indicate if download should be stopped
     private volatile boolean shouldStopDownload = false;
+    private volatile okhttp3.Call activeCall;
 
     public XHSDownloader(Context context) {
         this(context, null);
@@ -106,6 +107,11 @@ public class XHSDownloader {
                 @Override
                 public void onVideoDetected() {
                     callback.onVideoDetected();
+                }
+
+                @Override
+                public boolean isCancelled() {
+                    return callback.isCancelled();
                 }
             };
         } else {
@@ -647,7 +653,8 @@ public class XHSDownloader {
                     .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=1.0,image/avif,image/webp,image/apng,*/*;q=1.0")
                     .build();
             
-            Response response = httpClient.newCall(request).execute();
+            activeCall = httpClient.newCall(request);
+            Response response = activeCall.execute();
             
             if (response.isSuccessful() && response.body() != null) {
                 return response.body().string();
@@ -2152,7 +2159,8 @@ public class XHSDownloader {
                     .build();
             
             // 同步执行请求
-            okhttp3.Response response = httpClient.newCall(request).execute();
+            activeCall = httpClient.newCall(request);
+            okhttp3.Response response = activeCall.execute();
             
             if (response.isSuccessful()) {
                 // 获取重定向后的最终URL
@@ -2320,6 +2328,12 @@ public class XHSDownloader {
 
     public void stopDownload() {
         this.shouldStopDownload = true;
+        if (activeCall != null) {
+            activeCall.cancel();
+        }
+        if (fileDownloader != null) {
+            fileDownloader.cancel();
+        }
     }
 
     public boolean shouldStopDownload() {

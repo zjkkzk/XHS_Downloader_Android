@@ -6,4 +6,12 @@ public interface DownloadCallback {
     void onDownloadProgressUpdate(long downloaded, long total);
     void onDownloadError(String status, String originalUrl);
     void onVideoDetected();
+    
+    /**
+     * Check if the download should be cancelled
+     * @return true if cancelled
+     */
+    default boolean isCancelled() {
+        return false;
+    }
 }
