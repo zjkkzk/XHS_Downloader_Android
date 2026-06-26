@@ -476,6 +476,44 @@ class MainActivity : ComponentActivity() {
                     onSaveSelectedMedia = { viewModel.saveSelectedMedia { showToast(it) } },
                     onToggleSelectiveItem = viewModel::toggleSelectiveItem
                 )
+
+                // 检测到"重试同一链接但解析数量不一致"时，提示是否导出诊断日志
+                val inconsistentRetry = uiState.inconsistentRetry
+                if (inconsistentRetry.show) {
+                    WindowDialog(
+                        title = stringResource(R.string.retry_inconsistent_dialog_title),
+                        summary = stringResource(
+                            R.string.retry_inconsistent_dialog_message,
+                            inconsistentRetry.previousCount,
+                            inconsistentRetry.currentCount
+                        ),
+                        show = true,
+                        onDismissRequest = { viewModel.dismissInconsistentRetryDialog() }
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            TextButton(
+                                text = stringResource(R.string.cancel),
+                                onClick = { viewModel.dismissInconsistentRetryDialog() },
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            TextButton(
+                                text = stringResource(R.string.retry_inconsistent_save_button),
+                                onClick = {
+                                    viewModel.saveInconsistentRetryLogs(
+                                        onResult = { showToast(it) },
+                                        onError = { showToast(it) }
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.textButtonColorsPrimary()
+                            )
+                        }
+                    }
+                }
             }
         }
     }
