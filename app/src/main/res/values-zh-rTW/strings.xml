@@ -191,4 +191,11 @@
     <string name="download_detail_title">下載詳情</string>
     <string name="downloading_files">正在下載...</string>
     <string name="clipboard_xhs_link_detected">偵測到小紅書連結</string>
+
+    <!-- 解析不一致診斷（issue #37） -->
+    <string name="retry_inconsistent_dialog_title">解析結果不一致</string>
+    <string name="retry_inconsistent_dialog_message">注意到您正在重試上一次下載，但本次解析到的數量與上次不同（上次 %1$d 項，本次 %2$d 項）。是否將兩次的詳細日誌儲存到 Download 資料夾，以便回報給開發者？</string>
+    <string name="retry_inconsistent_save_button">儲存日誌</string>
+    <string name="retry_inconsistent_save_success">日誌已儲存到 %1$s</string>
+    <string name="retry_inconsistent_save_failed">日誌儲存失敗</string>
 </resources>

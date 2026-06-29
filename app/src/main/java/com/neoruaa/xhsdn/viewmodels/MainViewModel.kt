@@ -3,7 +3,11 @@ package com.neoruaa.xhsdn.viewmodels
 import android.app.Application
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ContentValues
 import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +33,7 @@ import com.neoruaa.xhsdn.XHSDownloader
 import com.neoruaa.xhsdn.data.DownloadTask
 import com.neoruaa.xhsdn.utils.NotificationHelper
 import java.io.File
+import java.io.IOException
 
 
 data class MediaItem(val path: String, val type: MediaType)
@@ -62,6 +67,19 @@ data class SelectiveDownloadUiState(
     val errorMessage: String? = null
 )
 
+/**
+ * Shown when the user retries the same URL but the app parses a different number of
+ * media items than the previous attempt. Offers to export both attempts' details so
+ * the inconsistency can be reported to the developer (see issue #37).
+ */
+data class InconsistentRetryDialogState(
+    val show: Boolean = false,
+    val url: String = "",
+    val previousCount: Int = 0,
+    val currentCount: Int = 0,
+    val logContent: String = ""
+)
+
 data class MainUiState(
     val urlInput: String = "",
     val status: List<String> = emptyList(),
@@ -72,7 +90,8 @@ data class MainUiState(
     val downloadProgressText: String = "0%｜0kb/s", // Format: "XX%｜XXXkb/s"
     val showWebCrawl: Boolean = false,
     val showVideoWarning: Boolean = false,
-    val selectiveDownload: SelectiveDownloadUiState = SelectiveDownloadUiState()
+    val selectiveDownload: SelectiveDownloadUiState = SelectiveDownloadUiState(),
+    val inconsistentRetry: InconsistentRetryDialogState = InconsistentRetryDialogState()
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -86,6 +105,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var hasUserContinuedAfterVideoWarning = false
     private var downloadJob: Job? = null
     private var currentDownloader: XHSDownloader? = null
+
+    // Records the previous download attempt so we can detect when the user retries the
+    // same URL but the app parses a different number of media items (see issue #37).
+    private data class ParseAttempt(
+        val url: String,
+        val mediaCount: Int,
+        val timestampMillis: Long,
+        val mode: String
+    )
+    private var lastParseAttempt: ParseAttempt? = null
 
     // Track individual file progress for more accurate overall progress
     private val fileProgressMap = mutableMapOf<String, Float>() // Maps file path to progress (0.0 to 1.0)
@@ -204,6 +233,119 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Record the parse result of a download attempt and, if the user is retrying the
+     * same URL but the parsed media count changed, surface a dialog offering to export
+     * the diagnostic logs. Safe to call from any thread.
+     */
+    private fun recordParseAttemptAndDetect(url: String, mediaCount: Int, mode: String) {
+        val previous = lastParseAttempt
+        val current = ParseAttempt(url, mediaCount, System.currentTimeMillis(), mode)
+        lastParseAttempt = current
+
+        if (previous != null && previous.url == url && previous.mediaCount != mediaCount) {
+            val logContent = buildInconsistencyLog(previous, current)
+            _uiState.update { state ->
+                state.copy(
+                    inconsistentRetry = InconsistentRetryDialogState(
+                        show = true,
+                        url = url,
+                        previousCount = previous.mediaCount,
+                        currentCount = mediaCount,
+                        logContent = logContent
+                    )
+                )
+            }
+        }
+    }
+
+    private fun buildInconsistencyLog(previous: ParseAttempt, current: ParseAttempt): String {
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+        fun line(label: String, attempt: ParseAttempt) = buildString {
+            appendLine("[$label]")
+            appendLine("time: ${fmt.format(java.util.Date(attempt.timestampMillis))}")
+            appendLine("mode: ${attempt.mode}")
+            appendLine("parsedMediaCount: ${attempt.mediaCount}")
+        }
+        return buildString {
+            appendLine("XHS Downloader - parse inconsistency diagnostic")
+            appendLine("generatedAt: ${fmt.format(java.util.Date())}")
+            appendLine("appVersion: ${com.neoruaa.xhsdn.BuildConfig.VERSION_NAME} (${com.neoruaa.xhsdn.BuildConfig.VERSION_CODE})")
+            appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL}")
+            appendLine("androidVersion: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+            appendLine("url: ${current.url}")
+            appendLine("countDelta: ${previous.mediaCount} -> ${current.mediaCount}")
+            appendLine()
+            append(line("previousAttempt", previous))
+            appendLine()
+            append(line("currentAttempt", current))
+        }
+    }
+
+    fun dismissInconsistentRetryDialog() {
+        _uiState.update { it.copy(inconsistentRetry = InconsistentRetryDialogState()) }
+    }
+
+    fun saveInconsistentRetryLogs(onResult: (String) -> Unit, onError: (String) -> Unit) {
+        val content = _uiState.value.inconsistentRetry.logContent
+        val app = getApplication<Application>()
+        if (content.isBlank()) {
+            _uiState.update { it.copy(inconsistentRetry = InconsistentRetryDialogState()) }
+            onError(app.getString(R.string.retry_inconsistent_save_failed))
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val savedLocation = runCatching { writeDiagnosticLogToDownloads(content) }.getOrNull()
+            withContext(Dispatchers.Main) {
+                _uiState.update { it.copy(inconsistentRetry = InconsistentRetryDialogState()) }
+                if (savedLocation != null) {
+                    onResult(app.getString(R.string.retry_inconsistent_save_success, savedLocation))
+                } else {
+                    onError(app.getString(R.string.retry_inconsistent_save_failed))
+                }
+            }
+        }
+    }
+
+    private fun writeDiagnosticLogToDownloads(content: String): String {
+        val app = getApplication<Application>()
+        val fileName = "xhsdn_diagnostic_${System.currentTimeMillis()}.txt"
+        val subDir = "xhsdn"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val resolver = app.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                put(MediaStore.MediaColumns.MIME_TYPE, "text/plain")
+                put(
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                    Environment.DIRECTORY_DOWNLOADS + File.separator + subDir
+                )
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: throw IOException("Failed to create MediaStore entry")
+            (resolver.openOutputStream(uri)
+                ?: throw IOException("Failed to open output stream")).use { out ->
+                out.write(content.toByteArray(Charsets.UTF_8))
+            }
+            val finalize = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            resolver.update(uri, finalize, null, null)
+            return "Download/$subDir/$fileName"
+        } else {
+            val dir = File(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                subDir
+            )
+            if (!dir.exists() && !dir.mkdirs()) {
+                throw IOException("Failed to create directory: ${dir.absolutePath}")
+            }
+            val file = File(dir, fileName)
+            file.writeText(content, Charsets.UTF_8)
+            return file.absolutePath
+        }
+    }
+
     fun startSelectiveDownload(onError: (String) -> Unit) {
         val targetUrl = _uiState.value.urlInput.trim()
         if (targetUrl.isEmpty()) {
@@ -254,6 +396,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 totalMediaCount = runCatching { XHSDownloader(getApplication()).getMediaCount(targetUrl) }
                     .getOrElse { 0 }
                 updateSelectiveProgress()
+                recordParseAttemptAndDetect(targetUrl, totalMediaCount, "selective")
 
                 val result = downloader.downloadContentToCache(targetUrl, sessionDir)
                 coroutineContext[Job]?.ensureActive()
@@ -473,6 +616,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             totalMediaCount = runCatching { XHSDownloader(getApplication()).getMediaCount(targetUrl) }
                 .getOrElse { 0 }
             updateProgress()
+            recordParseAttemptAndDetect(targetUrl, totalMediaCount, "normal")
 
             // Update the task with the actual total file count
             if (totalMediaCount > 0) {
@@ -576,6 +720,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             totalMediaCount = runCatching { XHSDownloader(getApplication()).getMediaCount(targetUrl) }
                 .getOrElse { 0 }
             updateProgress()
+            recordParseAttemptAndDetect(targetUrl, totalMediaCount, "retry")
 
             val myTaskId = task.id
             val localCompletedFiles = java.util.concurrent.atomic.AtomicInteger(taskCompletedFiles)
@@ -855,10 +1000,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun createSelectiveCacheCallback(scope: kotlinx.coroutines.CoroutineScope): DownloadCallback {
         return object : DownloadCallback {
             override fun onFileDownloaded(filePath: String) {
-                if (displayedFiles.add(filePath)) {
-                    downloadedCount++
-                    currentFileProgress = 0f
-                    scope.launch(Dispatchers.Main) {
+                // onFileDownloaded is invoked concurrently from the download thread pool
+                // (up to 4 threads). displayedFiles / downloadedCount are not thread-safe,
+                // so all shared-state mutations are serialized on the main dispatcher to
+                // avoid a race that could randomly drop a cached item from the preview list.
+                scope.launch(Dispatchers.Main) {
+                    if (displayedFiles.add(filePath)) {
+                        downloadedCount++
+                        currentFileProgress = 0f
                         val item = CachedMediaItem(
                             path = filePath,
                             displayName = File(filePath).name,

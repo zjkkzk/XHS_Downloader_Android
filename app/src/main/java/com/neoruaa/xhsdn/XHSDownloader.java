@@ -13,6 +13,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -22,6 +23,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -40,7 +42,8 @@ public class XHSDownloader {
     private List<String> downloadUrls;
     private boolean cacheDestinationMode = false;
     private File cacheDestinationDir;
-    private final List<CachedMediaFile> cachedMediaFiles = new ArrayList<>();
+    // Thread-safe: populated concurrently from the download executor thread pool.
+    private final List<CachedMediaFile> cachedMediaFiles = Collections.synchronizedList(new ArrayList<>());
     
     // Regex patterns for URL matching
     private static final Pattern XHS_LINK_PATTERN = Pattern.compile("(?:https?://)?www\\.xiaohongshu\\.com/explore/\\S+");
@@ -52,8 +55,9 @@ public class XHSDownloader {
     // Map to store the relationship between transformed URLs and original URLs for fallback
     private java.util.Map<String, String> urlMapping = new java.util.HashMap<>();
     
-    // Track successful downloads for the overall download result
-    private int successfulDownloads = 0;
+    // Track successful downloads for the overall download result.
+    // Atomic because it is incremented from concurrent download callbacks.
+    private final AtomicInteger successfulDownloads = new AtomicInteger(0);
 
     // Store live photo pairs to distinguish them from regular videos
     private List<LivePhotoPair> livePhotoPairs = new ArrayList<>();
@@ -88,7 +92,7 @@ public class XHSDownloader {
             this.downloadCallback = new DownloadCallback() {
                 @Override
                 public void onFileDownloaded(String filePath) {
-                    successfulDownloads++; // Increment counter when a file is successfully downloaded
+                    successfulDownloads.incrementAndGet(); // Increment counter when a file is successfully downloaded
                     callback.onFileDownloaded(filePath);
                 }
 
@@ -156,7 +160,7 @@ public class XHSDownloader {
     
     public boolean downloadContent(String inputUrl) {
         // Reset successful downloads counter for this download session
-        this.successfulDownloads = 0;
+        this.successfulDownloads.set(0);
         boolean hasErrors = false; // Track if any errors occurred
         boolean hasContent = false; // Track if we found any content to download
         try {
@@ -418,9 +422,10 @@ public class XHSDownloader {
             
             // Return true if we successfully downloaded at least one file, even if some had errors
             // For the overall process, return success if successfulDownloads > 0
-            boolean overallSuccess = successfulDownloads > 0;
+            int successCount = successfulDownloads.get();
+            boolean overallSuccess = successCount > 0;
             
-            Log.d(TAG, "Download process completed with " + successfulDownloads + " successful downloads, hasErrors: " + hasErrors);
+            Log.d(TAG, "Download process completed with " + successCount + " successful downloads, hasErrors: " + hasErrors);
             
             return overallSuccess;
         } catch (Exception e) {

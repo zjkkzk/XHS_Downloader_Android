@@ -191,4 +191,11 @@
     <string name="download_detail_title">Download Details</string>
     <string name="downloading_files">Downloading...</string>
     <string name="clipboard_xhs_link_detected">XHS Link Detected</string>
+
+    <!-- Parse inconsistency diagnostic (issue #37) -->
+    <string name="retry_inconsistent_dialog_title">Inconsistent parse result</string>
+    <string name="retry_inconsistent_dialog_message">It looks like you\'re retrying the previous download, but the app found a different number of items this time (previously %1$d, now %2$d). Save the detailed logs of both attempts to your Download folder so you can report this to the developer?</string>
+    <string name="retry_inconsistent_save_button">Save logs</string>
+    <string name="retry_inconsistent_save_success">Logs saved to %1$s</string>
+    <string name="retry_inconsistent_save_failed">Failed to save logs</string>
 </resources>
