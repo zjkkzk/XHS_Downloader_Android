@@ -70,6 +70,20 @@
     <string name="accessibility_service_description">启用此服务以允许小红书下载器在后台监听您的剪贴板，自动检测小红书链接并开始下载。</string>
 
     <!-- Settings category titles -->
+    <string name="storage_location">存储位置</string>
+    <string name="storage_location_reset">使用默认存储位置</string>
+    <string name="storage_location_picker_unavailable">此设备没有可用的文件夹选择器</string>
+    <string name="storage_location_local_only">请选择设备存储中的本地文件夹</string>
+    <string name="storage_location_permission_required">所选文件夹未授予持久的读写权限</string>
+    <string name="storage_location_access_lost_reselect">存储文件夹的访问权限已失效，请前往设置重新选择。</string>
+    <string name="storage_location_invalid">所选文件夹不可用</string>
+    <string name="storage_location_not_writable">请选择允许创建文件的文件夹</string>
+    <string name="storage_location_selected_folder">已选择的文件夹</string>
+    <string name="settings_check_existing_files_before_save">下载前检查已有文件</string>
+    <string name="settings_check_existing_files_before_save_enabled_desc">关闭后不再扫描目录中的文件名，保存更快，但同名文件可能会以 (1)、(2) 等形式共存</string>
+    <string name="settings_check_existing_files_before_save_disabled_desc">开启后会在保存前检查目录并覆盖同名文件</string>
+    <string name="settings_check_existing_permission_denied">未获得“所有文件访问”权限，未开始下载。</string>
+    <string name="settings_check_existing_permission_unavailable">此设备没有可用的“所有文件访问”设置页面。</string>
     <string name="download_options">下载选项</string>
     <string name="clipboard">剪贴板</string>
     <string name="file_naming">文件命名</string>
@@ -122,7 +136,6 @@
     <string name="unable_to_open_file">无法打开文件: %1$s</string>
     <string name="link_copied">链接已复制</string>
     <string name="no_valid_link_found">未找到有效链接</string>
-    <string name="storage_permission_required">缺少存储权限，请打开 App 授予权限</string>
     <string name="clipboard_no_xhs_link">剪贴板中未检测到小红书链接</string>
     <string name="copied_description">已复制文案</string>
     <string name="unable_to_open_browser">无法打开浏览器: %1$s</string>
@@ -132,18 +145,11 @@
     <string name="file_does_not_exist">文件不存在：%1$s</string>
     <string name="unable_to_open_file_error">无法打开文件：%1$s</string>
     <string name="grant_all_files_access_retry">请授予所有文件访问权限后重试</string>
-    <string name="task_ignored_downloading">任务忽略，链接正在下载中，请勿重复复制</string>
-    <string name="task_ignored_recently_downloaded">任务忽略，该链接最近已下载过，请在历史页查看</string>
-    <string name="auto_download_unavailable">无法自动下载</string>
     <string name="preparing_download">正在准备下载...</string>
-    <string name="downloading_files_count">正在下载... 共 %1$d 个文件</string>
-    <string name="download_completed_files_count">下载完成，成功下载 %1$d 个文件</string>
-    <string name="download_failed_no_files">下载失败，未能下载文件</string>
-    <string name="download_failed_check_network">下载失败，请检查网络或链接</string>
     <string name="download_cancelled_by_user">下载已取消，用户操作</string>
     <string name="download_error_message">下载出错：%1$s</string>
-    <string name="user_manually_stopped">用户手动停止</string>
     <string name="delete_file_dialog_title">删除文件</string>
+    <string name="delete_file_failed">无法删除“%1$s”</string>
     <string name="delete_file_dialog_message">是否删除 \"%1$s\" 媒体文件？</string>
     <string name="notes_content_title">笔记文案</string>
     <string name="downloaded_files_title_lower">已下载文件</string>
@@ -156,13 +162,6 @@
     <string name="failed_files_format">· %1$d 失败</string>
     <string name="files_completed_format">%1$d/%2$d</string>
     <string name="official_limitation_tip">因官方限制，仅能下载低清版本。如需高清，选网页爬取。</string>
-    <string name="download_completed_notification_title">下载完成</string>
-    <string name="download_failed_notification_title">下载失败</string>
-    <string name="download_cancelled_notification_title">下载已取消</string>
-    <string name="download_error_notification_title">下载出错</string>
-    <string name="media_type_image">图片</string>
-    <string name="media_type_video">视频</string>
-    <string name="media_type_other">其他</string>
     <string name="note_type_image">图文</string>
     <string name="note_type_video">视频</string>
     <string name="note_type_unknown">未知</string>
@@ -261,4 +260,8 @@
     <string name="debug_keyword_web_crawl">网页爬取</string>
     <string name="debug_keyword_hint">提示</string>
     <string name="common_zero_progress">0/0</string>
+    <string name="main_search_history">搜索分享链接或简介</string>
+    <string name="common_clear_search">清除搜索</string>
+    <string name="main_search_no_results">没有匹配的下载任务</string>
+    <string name="main_search_adjust_query">请尝试其他关键词或状态筛选</string>
 </resources>
