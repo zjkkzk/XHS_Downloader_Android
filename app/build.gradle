@@ -20,24 +20,13 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    def signingPropertiesFile = rootProject.file("keystore.properties")
-    def signingProperties = new Properties()
-    if (signingPropertiesFile.exists()) {
-        signingPropertiesFile.withInputStream { signingProperties.load(it) }
-    }
-
-    signingConfigs {
-        release {
-            storeFile rootProject.file(signingProperties.getProperty("storeFile", "release-keystore.jks"))
-            storePassword signingProperties.getProperty("storePassword")
-            keyAlias signingProperties.getProperty("keyAlias", "xhsdownloader-release")
-            keyPassword signingProperties.getProperty("keyPassword")
-        }
-    }
+    // 不再需要 signingConfigs.release，直接注释掉
+    // 如果你以后要用正式签名，可以保留，但现在不用
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // 关键修改：改用 debug 签名，无需任何密钥文件
+            signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
