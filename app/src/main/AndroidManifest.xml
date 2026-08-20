@@ -14,6 +14,7 @@
 
 
     <application
+        android:extractNativeLibs="false"
         android:name=".XHSApplication"
         android:allowBackup="true"
         android:enableOnBackInvokedCallback="true"
