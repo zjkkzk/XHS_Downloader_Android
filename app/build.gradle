@@ -20,9 +20,12 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // 不再需要 signingConfigs.release，直接注释掉
-    // 如果你以后要用正式签名，可以保留，但现在不用
+    // 新增：设置不压缩的文件类型（dex 和 so 仅存储）
+    aaptOptions {
+        noCompress 'dex', 'so'
+    }
 
+    // 如果你以后要用正式签名，可以取消注释并配置
     buildTypes {
         release {
             // 关键修改：改用 debug 签名，无需任何密钥文件
