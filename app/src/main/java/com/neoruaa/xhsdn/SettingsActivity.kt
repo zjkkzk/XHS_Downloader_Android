@@ -47,6 +47,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -348,6 +349,7 @@ class SettingsActivity : ComponentActivity() {
                     onResetStorageLocation = viewModel::onResetCustomStorageLocation,
                     topBarState = topBarState
                 )
+                com.neoruaa.xhsdn.feature.update.UpdateDialog((application as XHSApplication).appContainer.updateChecker)
             }
         }
     }
@@ -523,8 +525,9 @@ class SettingsActivity : ComponentActivity() {
 }
 
 @Composable
-internal fun SettingsRoute(onBack: () -> Unit) {
+internal fun SettingsRoute(onBack: () -> Unit, onOpenAdvanced: ((Int) -> Unit)? = null) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
     val repository = remember(context) {
         (context.applicationContext as XHSApplication).appContainer.settingsRepository
     }
@@ -540,7 +543,7 @@ internal fun SettingsRoute(onBack: () -> Unit) {
     val pendingCheckExistingFilesChange = remember { mutableStateOf<Boolean?>(null) }
 
     fun showMessage(messageResId: Int) {
-        Toast.makeText(context, context.getString(messageResId), Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, resources.getString(messageResId), Toast.LENGTH_SHORT).show()
     }
 
     val storageTreeLauncher = rememberLauncherForActivityResult(
@@ -633,7 +636,8 @@ internal fun SettingsRoute(onBack: () -> Unit) {
         onCheckExistingFilesBeforeSaveChange = ::updateCheckExistingFiles,
         onStorageLocationClick = ::openStorageTreePicker,
         onResetStorageLocation = routeViewModel::onResetCustomStorageLocation,
-        topBarState = topBarState
+        topBarState = topBarState,
+        onOpenAdvanced = onOpenAdvanced
     )
 }
 
@@ -723,9 +727,20 @@ private fun SettingsScreen(
     onCheckExistingFilesBeforeSaveChange: (Boolean) -> Unit,
     onStorageLocationClick: () -> Unit,
     onResetStorageLocation: () -> Unit,
-    topBarState: TopAppBarState
+    topBarState: TopAppBarState,
+    onOpenAdvanced: ((Int) -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    var localAdvanced by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<Int?>(null) }
+    if (localAdvanced != null) {
+        androidx.activity.compose.BackHandler { localAdvanced = null }
+        com.neoruaa.xhsdn.feature.settings.DownloadSettingsRoute(localAdvanced!!, onBack = { localAdvanced = null },
+            onOpenBrowser = { context.startActivity(Intent(context, WebViewActivity::class.java).putExtra("url", "https://www.xiaohongshu.com")) })
+        return
+    }
+    val openAdvanced: (Int) -> Unit = onOpenAdvanced ?: { localAdvanced = it }
+    val updateChecker = remember(context) { (context.applicationContext as XHSApplication).appContainer.updateChecker }
+    val updateState by updateChecker.state.collectAsStateWithLifecycle()
     val scrollBehavior = top.yukonga.miuix.kmp.basic.MiuixScrollBehavior(state = topBarState)
     val windowLayoutInfo = rememberWindowLayoutInfo()
     val topBarBackdrop = rememberMiuixTopBarBackdrop()
@@ -734,7 +749,9 @@ private fun SettingsScreen(
         if (uiState.customStorageTreeUri != null) {
             add("check_existing_files_before_save")
         }
-        add("create_live_photos")
+        add("media_advanced")
+        add("archive_advanced")
+        add("network_advanced")
         add("selective_download")
         add("debug_notifications")
         add("keep_screen_on")
@@ -826,12 +843,9 @@ private fun SettingsScreen(
                         checked = uiState.checkExistingFilesBeforeSave,
                         onCheckedChange = onCheckExistingFilesBeforeSaveChange
                     )
-                    "create_live_photos" -> MiuixSwitchWidget(
-                        title = stringResource(R.string.create_live_photos),
-                        description = stringResource(R.string.create_live_photos_desc),
-                        checked = uiState.createLivePhotos,
-                        onCheckedChange = onCreateLivePhotosChange
-                    )
+                    "media_advanced" -> ArrowPreference(title = stringResource(R.string.settings_media_title), onClick = { openAdvanced(0) })
+                    "archive_advanced" -> ArrowPreference(title = stringResource(R.string.settings_archive_title), onClick = { openAdvanced(1) })
+                    "network_advanced" -> ArrowPreference(title = stringResource(R.string.settings_network_title), onClick = { openAdvanced(2) })
                     "selective_download" -> MiuixSwitchWidget(
                         title = stringResource(R.string.selective_download),
                         description = stringResource(R.string.selective_download_desc),
@@ -976,7 +990,7 @@ private fun SettingsScreen(
             }
 
             groupedCardItems(
-                items = listOf("version", "github"),
+                items = listOf("version", "check_updates", "github"),
                 key = { "about_$it" }
             ) { row ->
                 when (row) {
@@ -987,6 +1001,14 @@ private fun SettingsScreen(
                             BuildConfig.VERSION_NAME
                         ),
                         onClick = { }
+                    )
+                    "check_updates" -> BasicComponent(
+                        title = stringResource(R.string.settings_check_updates),
+                        summary = stringResource(if (updateState.isChecking) R.string.update_checking else R.string.update_check_hint),
+                        onClick = updateChecker::checkManually,
+                        endActions = {
+                            ActionIconButton(MiuixIcons.Regular.Refresh, stringResource(R.string.settings_check_updates), updateChecker::checkManually)
+                        }
                     )
                     "github" -> BasicComponent(
                         title = stringResource(R.string.visit_github),

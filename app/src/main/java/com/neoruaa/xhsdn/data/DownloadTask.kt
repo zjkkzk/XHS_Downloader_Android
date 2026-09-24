@@ -9,6 +9,11 @@ import org.json.JSONObject
  * 下载任务状态
  */
 enum class TaskStatus {
+    RESOLVING,
+    PAUSED,
+    PARTIAL,
+    CANCELLED,
+    SKIPPED,
     QUEUED,      // 排队中
     DOWNLOADING, // 下载中
     COMPLETED,   // 下载完成
@@ -44,6 +49,11 @@ data class DownloadTask(
     val mediaRefs: List<StoredMediaRef> = emptyList(), // Persisted media locations
     val noteContent: String? = null // 笔记内容
 ) {
+    val displayTitle: String
+        get() = noteTitle?.replace("[话题]", "")?.trim()?.takeIf(String::isNotEmpty)
+            ?: noteContent?.lineSequence()?.map { it.replace("[话题]", "").trim() }?.firstOrNull(String::isNotEmpty)
+            ?: noteUrl
+
     /** Compatibility view for legacy callers while media locations migrate to stable URIs. */
     val filePaths: List<String>
         get() = mediaRefs.map(StoredMediaRef::path)
@@ -56,10 +66,10 @@ data class DownloadTask(
         } else 0f
     
     val isActive: Boolean
-        get() = status == TaskStatus.QUEUED || status == TaskStatus.DOWNLOADING || status == TaskStatus.WAITING_FOR_USER
+        get() = status == TaskStatus.RESOLVING || status == TaskStatus.QUEUED || status == TaskStatus.DOWNLOADING || status == TaskStatus.WAITING_FOR_USER
     
     val isCompleted: Boolean
-        get() = status == TaskStatus.COMPLETED || status == TaskStatus.FAILED
+        get() = status in setOf(TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.PARTIAL, TaskStatus.CANCELLED, TaskStatus.SKIPPED)
     
     fun toJson(): JSONObject {
         return JSONObject().apply {

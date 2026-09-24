@@ -267,6 +267,7 @@ fun DetailMediaPreview(
     onThumbnailLoadComplete: () -> Unit = {}
 ) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleteAfterDismiss by remember { mutableStateOf(false) }
     val thumbnailState = rememberStoredThumbnail(item)
     val bitmap = thumbnailState.bitmap
     val currentLoadCompleteCallback by rememberUpdatedState(onThumbnailLoadComplete)
@@ -357,33 +358,37 @@ fun DetailMediaPreview(
         }
     }
 
-    if (showDeleteDialog) {
-        WindowDialog(
-            title = stringResource(R.string.delete_file_dialog_title),
-            summary = stringResource(R.string.delete_file_dialog_message, fileName),
-            show = showDeleteDialog,
-            onDismissRequest = { showDeleteDialog = false }
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
-                TextButton(
-                    text = stringResource(R.string.cancel),
-                    onClick = { showDeleteDialog = false },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.size(12.dp))
-                TextButton(
-                    text = stringResource(R.string.apply),
-                    onClick = {
-                        onDelete()
-                        showDeleteDialog = false
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary()
-                )
+    WindowDialog(
+        title = stringResource(R.string.delete_file_dialog_title),
+        summary = stringResource(R.string.delete_file_dialog_message, fileName),
+        show = showDeleteDialog,
+        onDismissRequest = { showDeleteDialog = false },
+        onDismissFinished = {
+            if (deleteAfterDismiss) {
+                deleteAfterDismiss = false
+                onDelete()
             }
+        }
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            TextButton(
+                text = stringResource(R.string.cancel),
+                onClick = { showDeleteDialog = false },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.size(12.dp))
+            TextButton(
+                text = stringResource(R.string.apply),
+                onClick = {
+                    deleteAfterDismiss = true
+                    showDeleteDialog = false
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.textButtonColorsPrimary()
+            )
         }
     }
 }
@@ -405,9 +410,9 @@ fun SelectableMediaPreview(
     LaunchedEffect(thumbnailState.isComplete, item.path, thumbnailLoadEpoch) {
         if (thumbnailState.isComplete) currentLoadCompleteCallback()
     }
-    val aspectRatio = if (thumbnailLayoutReady) bitmap.aspectRatioOrDefault() else 0.75f
+    val aspectRatio = if (item.width > 0 && item.height > 0) (item.width.toFloat() / item.height).coerceIn(0.5f, 2f) else if (thumbnailLayoutReady) bitmap.aspectRatioOrDefault() else 0.75f
     val overlayResId = remember(item.path, item.type) { selectableOverlayResId(item) }
-    val fileSize = remember(item.path) { selectableFileSize(item.path) }
+    val fileSize = item.displayName
 
     Column(
         modifier = modifier
@@ -438,7 +443,7 @@ fun SelectableMediaPreview(
                     bitmap?.let {
                         Image(
                             bitmap = it,
-                            contentDescription = item.path,
+                            contentDescription = item.displayName,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -569,23 +574,20 @@ private fun storedOverlayResId(item: MediaItem): Int? = when {
 
 @Composable
 private fun rememberSelectableThumbnail(item: CachedMediaItem): ThumbnailLoadState {
-    val state = produceState(
-        initialValue = ThumbnailLoadState(isComplete = false, bitmap = null),
-        item.path,
-        item.type
-    ) {
+    val context = LocalContext.current
+    val state = produceState(ThumbnailLoadState(false, null), item.path, item.previewUrl) {
         val bitmap = withContext(waterfallThumbnailDispatcher) {
-            val file = File(item.path)
-            if (!file.exists()) return@withContext null
-            runCatching {
-                when (item.type) {
-                    MediaType.IMAGE -> decodeSampledBitmap(file.path, 720, 720)?.asImageBitmap()
-                    MediaType.VIDEO -> createVideoThumbnail(file, 720, 720)?.asImageBitmap()
+            if (item.previewUrl.isNotBlank()) remoteThumbnail(context, item.previewUrl)?.asImageBitmap()
+            else runCatching {
+                val file = File(item.path)
+                if (!file.exists()) null else when (item.type) {
+                    MediaType.IMAGE -> decodeSampledBitmap(file.path, 600, 600)?.asImageBitmap()
+                    MediaType.VIDEO -> createVideoThumbnail(file, 600, 600)?.asImageBitmap()
                     MediaType.OTHER -> null
                 }
             }.getOrNull()
         }
-        value = ThumbnailLoadState(isComplete = true, bitmap = bitmap)
+        value = ThumbnailLoadState(true, bitmap)
     }
     return state.value
 }
@@ -613,6 +615,7 @@ private fun selectableOverlayResId(item: CachedMediaItem): Int? {
 }
 
 private fun isSelectableLivePhotoItem(item: CachedMediaItem): Boolean {
+    if (item.live) return true
     if (item.type != MediaType.IMAGE) {
         return false
     }

@@ -97,7 +97,11 @@ import com.neoruaa.xhsdn.utils.decodeSampledBitmap
 import com.neoruaa.xhsdn.utils.createVideoThumbnail
 import com.neoruaa.xhsdn.utils.deleteStoredMedia
 import com.neoruaa.xhsdn.utils.storedMediaExists
-import com.neoruaa.xhsdn.data.tasks.TaskManager
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.flowOf
 import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.window.WindowListPopup
 import top.yukonga.miuix.kmp.icon.extended.Info
@@ -178,12 +182,16 @@ class DetailActivity : ComponentActivity() {
         val noteUrl = intent.getStringExtra(EXTRA_NOTE_URL) // Get the note URL
 
         // 构建媒体项列表
-        val mediaItems = taskId
-            ?.let(TaskManager::getTaskById)
-            ?.mediaRefs
-            ?.map(::MediaItem)
-            ?.takeIf { it.isNotEmpty() }
-            ?: filePaths.map { path -> MediaItem(path, detectMediaType(path)) }
+        val mediaItems = filePaths.map { path -> MediaItem(path, detectMediaType(path)) }
+        taskId?.let { id -> lifecycleScope.launch {
+            val container = (application as XHSApplication).appContainer
+            container.initialization.await()
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                container.taskRepository.observeTask(id).collect { task ->
+                    task?.let { viewModel.updateState(DetailUiState(it.mediaRefs.map(::MediaItem), getString(R.string.download_detail_title), it.isActive, it.noteContent)) }
+                }
+            }
+        } }
 
         // 更新UI状态
         viewModel.updateState(
@@ -206,7 +214,7 @@ class DetailActivity : ComponentActivity() {
                     onMediaClick = { openFile(it) },
                     onDeleteMedia = { mediaItem ->
                         if (deleteStoredMedia(mediaItem.media)) {
-                            taskId?.let { id -> TaskManager.removeMediaRef(id, mediaItem.path) }
+                            taskId?.let { id -> lifecycleScope.launch { (application as XHSApplication).appContainer.taskRepository.removeMediaRef(id, mediaItem.path) } }
                             viewModel.removeMediaItem(mediaItem)
                         } else {
                             showToast(getString(R.string.delete_file_failed, mediaItem.media.displayName))
@@ -276,24 +284,25 @@ internal fun DetailRoute(
     onOpenWebView: (String) -> Unit
 ) {
     val context = LocalContext.current
+    val resources = androidx.compose.ui.platform.LocalResources.current
+    val detailTitle = stringResource(R.string.download_detail_title)
     val taskId = remember(route.taskId) { route.taskId.toLongOrNull() }
-    val initialMediaItems = remember(route) {
-        taskId
-            ?.let(TaskManager::getTaskById)
-            ?.mediaRefs
-            ?.map(::MediaItem)
-            ?.takeIf { it.isNotEmpty() }
-            ?: route.filePaths.map { path -> MediaItem(path, detectMediaType(path)) }
-    }
+    val repository = remember(context) { (context.applicationContext as XHSApplication).appContainer.taskRepository }
+    val task by remember(taskId) { taskId?.let(repository::observeTask) ?: flowOf(null) }.collectAsStateWithLifecycle(initialValue = null)
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val initialMediaItems = remember(route) { route.filePaths.map { path -> MediaItem(path, detectMediaType(path)) } }
     var uiState by remember(route) {
         mutableStateOf(
             DetailUiState(
                 mediaItems = initialMediaItems,
-                taskTitle = context.getString(R.string.download_detail_title),
+                taskTitle = detailTitle,
                 isDownloading = false,
                 noteContent = route.noteContent
             )
         )
+    }
+    androidx.compose.runtime.LaunchedEffect(task) {
+        task?.let { uiState = uiState.copy(mediaItems = it.mediaRefs.map(::MediaItem), isDownloading = it.isActive, noteContent = it.noteContent) }
     }
     val topBarState = rememberTopAppBarState()
 
@@ -303,14 +312,14 @@ internal fun DetailRoute(
         onMediaClick = { item -> openRouteMedia(context, item) },
         onDeleteMedia = { mediaItem ->
             if (context.deleteStoredMedia(mediaItem.media)) {
-                taskId?.let { id -> TaskManager.removeMediaRef(id, mediaItem.path) }
+                taskId?.let { id -> scope.launch { repository.removeMediaRef(id, mediaItem.path) } }
                 uiState = uiState.copy(
                     mediaItems = uiState.mediaItems.filter { it.path != mediaItem.path }
                 )
             } else {
                 Toast.makeText(
                     context,
-                    context.getString(R.string.delete_file_failed, mediaItem.media.displayName),
+                    resources.getString(R.string.delete_file_failed, mediaItem.media.displayName),
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -693,6 +702,7 @@ private fun estimateMediaCardHeight(item: MediaItem): Float {
 @Composable
 private fun MediaPreview(item: MediaItem, onClick: () -> Unit, onDelete: (MediaItem) -> Unit) {
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var deleteAfterDismiss by remember { mutableStateOf(false) }
     val bitmap = rememberThumbnail(item)
     val aspectRatio = rememberAspectRatio(item) ?: 0.75f
     val fileName = remember(item.path) { File(item.path).name }
@@ -779,38 +789,41 @@ private fun MediaPreview(item: MediaItem, onClick: () -> Unit, onDelete: (MediaI
         }
     }
 
-    if (showDeleteDialog) {
-        WindowDialog(
-            title = stringResource(R.string.delete_file_dialog_title),
-            summary = stringResource(R.string.delete_file_dialog_message, fileName),
-            show = true,
-            onDismissRequest = { showDeleteDialog = false }
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.padding(top = 8.dp)
-            ) {
-                TextButton(
-                    text = stringResource(R.string.cancel),
-                    onClick = { showDeleteDialog = false },
-                    modifier = Modifier.weight(1f)
-                )
-                Spacer(Modifier.width(12.dp))
-                TextButton(
-                    text = stringResource(R.string.apply),
-                    onClick = {
-                        // 删除文件
-                        val file = File(item.path)
-                        if (file.exists()) {
-                            file.delete()
-                        }
-                        onDelete(item) // 调用删除回调
-                        showDeleteDialog = false
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary()
-                )
+    WindowDialog(
+        title = stringResource(R.string.delete_file_dialog_title),
+        summary = stringResource(R.string.delete_file_dialog_message, fileName),
+        show = showDeleteDialog,
+        onDismissRequest = { showDeleteDialog = false },
+        onDismissFinished = {
+            if (deleteAfterDismiss) {
+                deleteAfterDismiss = false
+                val file = File(item.path)
+                if (file.exists()) {
+                    file.delete()
+                }
+                onDelete(item)
             }
+        }
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.padding(top = 8.dp)
+        ) {
+            TextButton(
+                text = stringResource(R.string.cancel),
+                onClick = { showDeleteDialog = false },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(Modifier.width(12.dp))
+            TextButton(
+                text = stringResource(R.string.apply),
+                onClick = {
+                    deleteAfterDismiss = true
+                    showDeleteDialog = false
+                },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.textButtonColorsPrimary()
+            )
         }
     }
 }
