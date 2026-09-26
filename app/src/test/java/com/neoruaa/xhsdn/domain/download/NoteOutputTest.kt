@@ -9,6 +9,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NoteOutputTest {
+    @Test fun knownWatermarkedStreamsNeverWinOnResolutionBitrateSizeOrCompatibility() {
+        val video = ResolvedMedia.Video("watermarked", candidates = listOf(
+            MediaCandidate("watermarked", width = 4000, height = 3000, bitrate = 99999, size = 99999, codec = "h264", watermarked = true),
+            MediaCandidate("unknown", width = 720, height = 1280, codec = "h265"),
+            MediaCandidate("original", original = true),
+        ))
+        for (preference in VideoPreference.entries) {
+            assertEquals("watermarked", NoteOutput.videoUrls(video, preference).last())
+        }
+        val old = com.neoruaa.xhsdn.data.settings.DownloadJson.decodeFromString<MediaCandidate>("""{"url":"old"}""")
+        assertFalse(old.watermarked)
+    }
+
+    @Test fun livePhotoFormatChangesDownloadIdentity() {
+        val original = AppSettings()
+        val samsung = original.copy(downloadOptions = original.downloadOptions.copy(livePhotoFormat = com.neoruaa.xhsdn.data.settings.LivePhotoFormat.SAMSUNG))
+        assertNotEquals(NoteOutput.recordKey("note", "live", original, emptyList()), NoteOutput.recordKey("note", "live", samsung, emptyList()))
+    }
+
     @Test fun compatibilityPrefersHighestResolutionAvcWithoutDiscardingFallbacks() {
         val video = ResolvedMedia.Video("original", candidates = listOf(
             MediaCandidate("original", original = true),
@@ -31,6 +50,15 @@ class NoteOutputTest {
         val changed = original.copy(selectiveDownload = true, downloadOptions = original.downloadOptions.copy(skipExisting = true, timeoutSeconds = 90, proxy = "http://localhost:8080"))
         assertEquals(NoteOutput.recordKey("note", "image", original, emptyList()), NoteOutput.recordKey("note", "image", changed, emptyList()))
         assertNotEquals(NoteOutput.recordKey("note", "image", original, emptyList()), NoteOutput.recordKey("note", "image", changed.copy(customStorageTreeUri = "content://other"), emptyList()))
+    }
+
+    @Test fun selectionOffersCoversWithoutChangingAutomaticDownloadDefaults() {
+        val cover = ResolvedMedia.Image("cover", cover = true)
+        val video = ResolvedMedia.Video("video")
+        val note = com.neoruaa.xhsdn.core.model.ResolvedNote("", null, null, null, null, null, items = listOf(cover, video))
+        val options = com.neoruaa.xhsdn.data.settings.DownloadOptions(videoCoverDownload = false)
+        assertEquals(listOf(video), NoteOutput.eligible(note, options))
+        assertEquals(listOf(cover, video), NoteOutput.eligible(note, options, forSelection = true))
     }
 
     @Test fun limitsNameBytesWithoutSplittingUnicodeCharacters() {

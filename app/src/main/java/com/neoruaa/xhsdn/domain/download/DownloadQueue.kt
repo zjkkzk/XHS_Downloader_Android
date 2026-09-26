@@ -41,6 +41,9 @@ class DownloadQueue(private val context: Context, private val container: AppCont
     private val _downloadSpeeds = MutableStateFlow<Map<Long, Long>>(emptyMap())
     val downloadSpeeds: StateFlow<Map<Long, Long>> = _downloadSpeeds.asStateFlow()
 
+    private val _mediaProgress = MutableStateFlow<Map<Long, Map<String, MediaTransferProgress>>>(emptyMap())
+    val mediaProgress: StateFlow<Map<Long, Map<String, MediaTransferProgress>>> = _mediaProgress.asStateFlow()
+
     suspend fun enqueue(input: String, selection: Boolean = false, infoOnly: Boolean = false): List<Long> {
         container.initialization.await()
         container.settingsRepository.awaitReady()
@@ -161,6 +164,14 @@ class DownloadQueue(private val context: Context, private val container: AppCont
     }
 
     private suspend fun execute(id: Long) {
+        val transfers = java.util.concurrent.ConcurrentHashMap<String, MediaTransferProgress>()
+        suspend fun persistTransfers() {
+            transfers.toMap().forEach { (partId, progress) ->
+                sessions.saveResource(DownloadResourceEntity(id, "$partId:transfer", "",
+                    state = when { progress.failed -> "TRANSFER_FAILED"; progress.complete -> "TRANSFERRED"; else -> "TRANSFERRING" },
+                    bytesDownloaded = progress.downloaded, totalBytes = progress.total))
+            }
+        }
         try {
             var session = sessions.session(id) ?: run { tasks.updateTaskStatus(id, TaskStatus.PAUSED); return }
             val settings = DownloadJson.decodeFromString<AppSettings>(session.settingsJson)
@@ -179,7 +190,7 @@ class DownloadQueue(private val context: Context, private val container: AppCont
                 val author = sessions.author(authorId)
                 sessions.saveAuthor(NoteAuthorEntity(authorId, note.authorName.orEmpty(), author?.remark.orEmpty()))
             }
-            var media = NoteOutput.eligible(note, options)
+            var media = NoteOutput.eligible(note, options, forSelection = session.requireSelection)
             tasks.updateTask(id) { it.copy(noteTitle = it.noteTitle?.takeIf(String::isNotBlank) ?: note.title, noteContent = note.description,
                 noteType = if (note.type == "video") NoteType.VIDEO else NoteType.IMAGE, totalFiles = media.size) }
             if (session.requireSelection && session.selectedJson == null && !session.infoOnly) {
@@ -216,9 +227,11 @@ class DownloadQueue(private val context: Context, private val container: AppCont
             suspend fun publish(terminal: Boolean = false) = progressLock.withLock {
                 val fraction = fractions.values.sum().coerceAtMost((total - complete - failed).coerceAtLeast(0).toFloat())
                 _progress.update { it + (id to ((complete + fraction) / total).coerceIn(0f, 1f)) }
+                _mediaProgress.update { it + (id to transfers.toMap()) }
                 val now = android.os.SystemClock.elapsedRealtime()
                 if (terminal || now - lastPersist > 1000) {
                     lastPersist = now
+                    persistTransfers()
                     tasks.updateTask(id) { it.copy(completedFiles = complete, failedFiles = failed, currentFileProgress = fraction) }
                 }
             }
@@ -229,7 +242,10 @@ class DownloadQueue(private val context: Context, private val container: AppCont
                 try {
                     val (refs, notes) = if (previous != null && refsExist(previous.refsJson)) {
                         DownloadJson.decodeFromString<List<StoredMediaRef>>(previous.refsJson) to listOfNotNull(previous.warning)
-                    } else action()
+                    } else {
+                        sessions.saveResource(DownloadResourceEntity(id, mediaId, key, state = "DOWNLOADING"))
+                        action()
+                    }
                     currentCoroutineContext().ensureActive()
                     val didSkip = previous != null && existing == null
                     sessions.saveResource(DownloadResourceEntity(id, mediaId, key, if (didSkip) "SKIPPED" else "COMPLETED", DownloadJson.encodeToString(refs), warning = notes.joinToString("\n").ifBlank { null }))
@@ -262,18 +278,32 @@ class DownloadQueue(private val context: Context, private val container: AppCont
                         runResource(item.id) {
                             val refs = mutableListOf<StoredMediaRef>()
                             val notes = mutableListOf<String>()
-                            suspend fun fetch(partId: String, urls: List<String>): TransferredMedia = transfer.fetch(client, id, partId, urls, options.maxRetries, onBytesReceived = speedTracker::recordBytes) { bytes, length ->
-                                fractions[item.id] = if (length > 0) (bytes.toFloat() / length).coerceIn(0f, 0.98f) else 0f
+                            suspend fun fetch(partId: String, urls: List<String>): TransferredMedia {
+                                transfers[partId] = MediaTransferProgress()
+                                try {
+                                    val result = transfer.fetch(client, id, partId, urls, options.maxRetries, onBytesReceived = speedTracker::recordBytes) { bytes, length ->
+                                        transfers[partId] = MediaTransferProgress(bytes, length)
+                                        fractions[item.id] = if (length > 0) (bytes.toFloat() / length).coerceIn(0f, 0.98f) else 0f
+                                    }
+                                    transfers[partId] = MediaTransferProgress(result.file.length(), result.file.length(), complete = true)
+                                    return result
+                                } catch (cancelled: CancellationException) { throw cancelled
+                                } catch (error: Exception) {
+                                    transfers.compute(partId) { _, previous -> (previous ?: MediaTransferProgress()).copy(failed = true) }
+                                    throw error
+                                }
                             }
-                            suspend fun save(file: File, type: MediaFileType, suffix: String) {
+                            suspend fun save(file: File, type: MediaFileType, suffix: String, nameSuffix: String = suffix) {
                                 currentCoroutineContext().ensureActive()
                                 val pieceId = "${item.id}:output:$suffix"
                                 val piece = sessions.resources(id).firstOrNull { it.mediaId == pieceId && it.state == "COMPLETED" && refsExist(it.refsJson) }
                                 val ref = if (piece != null) DownloadJson.decodeFromString<List<StoredMediaRef>>(piece.refsJson).single() else {
                                     val filename = NoteOutput.fileName(note, settings, index, type.extension, task.createdAt)
-                                    val name = if (suffix == "main") filename else filename.substringBeforeLast('.') + "_$suffix.${type.extension}"
+                                    val name = if (suffix == "main") filename else filename.substringBeforeLast('.') + "_$nameSuffix.${type.extension}"
                                     val saveContext = currentCoroutineContext()
-                                    val stored = storage.storeArchived(destination, name, type.mimeType, file.length(), folders) { output ->
+                                    val paired = options.livePhotoMode == LivePhotoMode.MERGED && options.livePhotoFormat == LivePhotoFormat.VIVO_LEGACY &&
+                                        suffix in setOf("live", "vivo_motion")
+                                    val stored = storage.storeArchived(destination, name, type.mimeType, file.length(), folders, livePhotoPair = paired) { output ->
                                         file.inputStream().use { input ->
                                             val buffer = ByteArray(256 * 1024)
                                             while (true) {
@@ -309,15 +339,31 @@ class DownloadQueue(private val context: Context, private val container: AppCont
                                     val still = if (options.imageDownload) part { image(item.image) } else null
                                     val motion = if (options.videoDownload && options.livePhotoMode != LivePhotoMode.STILL) part { fetch(item.video.id, NoteOutput.videoUrls(item.video, options.videoPreference)) } else null
                                     val output = File(context.cacheDir, "merged_${id}_${index}.jpg")
+                                    val pairedVideo = File(context.cacheDir, "merged_${id}_${index}.mp4")
                                     try {
-                                        if (still != null && motion != null && options.livePhotoMode == LivePhotoMode.MERGED && LivePhotoCreator.createLivePhoto(still.file, motion.file, output, null)) {
-                                            save(output, MediaFileType("jpg", "image/jpeg"), "live")
+                                        val format = LivePhotoCreator.resolveFormat(options.livePhotoFormat)
+                                        val merge = still != null && motion != null && options.livePhotoMode == LivePhotoMode.MERGED
+                                        val created = merge && withContext(Dispatchers.IO) {
+                                            val mergeContext = currentCoroutineContext()
+                                            if (format == LivePhotoFormat.VIVO_LEGACY) {
+                                                val pairId = java.util.UUID.nameUUIDFromBytes("$id:${item.id}".toByteArray())
+                                                    .toString().replace("-", "").take(28)
+                                                LivePhotoCreator.createVivoPair(still.file, motion.file, output, pairedVideo, pairId) { mergeContext.ensureActive() }
+                                            } else {
+                                                LivePhotoCreator.createLivePhoto(still.file, motion.file, output, null, format) { mergeContext.ensureActive() }
+                                            }
+                                        }
+                                        if (created) {
+                                            save(output, MediaFileType("jpg", "image/jpeg"), "live", "live_MP")
+                                            if (format == LivePhotoFormat.VIVO_LEGACY) {
+                                                save(pairedVideo, MediaFileType("mp4", "video/mp4"), "vivo_motion", "live_MP")
+                                            }
                                         } else {
                                             if (still != null && motion != null && options.livePhotoMode == LivePhotoMode.MERGED) notes.add(context.getString(R.string.download_warning_live))
                                             still?.let { save(it.file, it.type, "main") }
                                             motion?.let { save(it.file, it.type, "motion") }
                                         }
-                                    } finally { output.delete() }
+                                    } finally { output.delete(); pairedVideo.delete() }
                                     componentError?.let { throw it }
                                 }
                             }
@@ -347,8 +393,13 @@ class DownloadQueue(private val context: Context, private val container: AppCont
             tasks.updateTaskStatus(id, TaskStatus.FAILED, errorMessage(error))
             debug(errorMessage(error))
         } finally {
-            _progress.update { it - id }
-            _downloadSpeeds.update { it - id }
+            try {
+                withContext(NonCancellable) { persistTransfers() }
+            } finally {
+                _progress.update { it - id }
+                _downloadSpeeds.update { it - id }
+                _mediaProgress.update { it - id }
+            }
         }
     }
 
